@@ -1,0 +1,47 @@
+add_rules("mode.debug", "mode.release")
+
+target("f5")
+    set_kind("binary")
+    set_languages("gnu99")
+    set_default(true)
+    add_deps("parser")
+    add_includedirs("src")
+    add_files("src/main.c")
+    on_load(function (target)
+        -- FIXME doesn't work
+        target:add("includedirs", target:autogendir())
+    end)
+	if is_mode("debug") then
+        set_optimize("none")
+		add_defines("__tb_debug__")
+    else
+        set_optimize("faster")
+	end
+
+target("packcc")
+	set_kind("binary")
+    set_languages("gnu99")
+	add_files("external/packcc/src/packcc.c")
+
+rule("peg")
+    set_extensions(".peg")
+    on_buildcmd_file(function (target, batchcmds, source, opts)
+        local pcc = target:dep("packcc")
+        local base = path.basename(source)
+        local c = target:autogenfile(base .. ".c")
+        local h = target:autogenfile(base .. ".h")
+        local o = target:objectfile(c)
+        batchcmds:vrunv(pcc:targetfile(), {"-o", base, source})
+        batchcmds:mv(base .. ".c", c)
+        batchcmds:mv(base .. ".h", h)
+        batchcmds:compile(c, o, {configs={languages="gnu99"}})
+        table.insert(target:headerfiles(), h)
+        table.insert(target:objectfiles(), o)
+    end)
+
+target("parser")
+    set_kind("object")
+    add_deps("packcc")
+    add_rules("peg")
+    add_includedirs("src")
+    add_files("src/parser.peg")
