@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <assert.h>
 
-#define TB_TRACE_MODULE_NAME "impl"
+#define TB_TRACE_MODULE_NAME "main"
 #define TB_TRACE_MODULE_DEBUG (1)
 #include "tbox/tbox.h"
 
