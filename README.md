@@ -4,14 +4,3 @@
 
 - generated `parser.c` includes `common.h`
 - `main.c` includes generated `parser.h`
-
-### what works
-
-    rm -rf build/
-    xmake build parser
-    xmake build
-
-### what doesn't work
-
-    rm -rf build/
-    xmake build
