@@ -1,4 +1,4 @@
-%auxil "struct head*"
+%auxil "tb_stack_ref_t"
 
 %source {
 #include <stdio.h>
@@ -9,7 +9,7 @@
 #include "common.h"
 }
 
-toplevel <- _* (list _*)* !.
+top <- _* list / _* !.
 
 atom <- list / dot / word
 
@@ -17,7 +17,7 @@ list <- '(' { push_open(auxil); } (_* atom)* _* ')' { collect_list(auxil); }
 
 dot <- '.' { push_dot(auxil); } !'.'
 
-word <- [a-zA-Z0-9-]+ { push_atom(auxil, strdup($0)); }
+word <- [a-zA-Z0-9-]+ { push_atom(auxil, tb_strdup($0)); }
 
 _ <- [ \t\n]
 
