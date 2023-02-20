@@ -1,3 +1,5 @@
-(printf hello world . foo . bar baz)
+(fn add (a b) . a + b)
 
-(echo foo bar (baz))
+(fn foo ()
+  (add 1 2)
+  (add 3 4))

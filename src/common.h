@@ -3,18 +3,24 @@
 
 #include "tbox/tbox.h"
 
-enum token_type { TOKEN_OPEN, TOKEN_ATOM, TOKEN_LIST, TOKEN_DOT };
-enum ast_type { AST_FN, AST_CALL, AST_REF, AST_DEF };
+enum token_type { T_WORD = 1, T_LIST, T_OPER };
+enum ast_type { A_FN, A_CALL, A_REF, A_DEF };
 
 typedef struct token {
 	enum token_type type;
 	union {
 		struct {
 			char *name;
-		} atom;
+		} word;
 
 		struct {
-			tb_list_ref_t children;
+			char *name;
+			struct token *left;
+			struct token *right;
+		} oper;
+
+		struct {
+			tb_stack_ref_t children;
 		} list;
 	};
 } token;
@@ -45,9 +51,15 @@ typedef struct ast {
 	};
 } ast;
 
-void push_atom(tb_stack_ref_t stack, char *name);
-void push_open(tb_stack_ref_t stack);
-void push_dot(tb_stack_ref_t stack);
-void collect_list(tb_stack_ref_t stack);
+token word(char *name);
+token oper(char *name, token l, token r);
+token dot(token l, token r);
+token list(tb_stack_ref_t children);
+token list0();
+token list1(token t);
+token append(token l, token t);
+void printl_token(token *t);
+void push(tb_stack_ref_t stack, token t);
+// void collect_list(tb_stack_ref_t stack);
 
 #endif // COMMON_H_
