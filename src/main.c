@@ -77,22 +77,17 @@ ast oper(char *name, ast l, ast r) {
 		.oper = { .name = name, .left = lift(l), .right = lift(r) } };
 }
 
+tb_bool_t ismark(tb_iterator_ref_t iterator, tb_cpointer_t item, tb_cpointer_t value) {
+	(void)iterator;
+	(void)value;
+	return ((ast*)item)->type == 0;
+}
+
 ast list(tb_stack_ref_t stack) {
 	tb_stack_ref_t args = tb_stack_init(tb_iterator_size(stack), ast_element);
-	int i = 0;
-	int n = 0;
-	tb_for_all(ast*, item, stack) {
-		if (item->type == 0) {
-			n = i + 1;
-		}
-		i += 1;
-	}
-	i = 0;
-	tb_for_all(ast*, item1, stack) {
-		if (i >= n) {
-			tb_stack_put(args, item1);
-		}
-		i += 1;
+	size_t mark = tb_rfind_if(stack, 0, tb_iterator_size(stack), ismark, 0);
+	tb_for(ast*, item, mark + 1, tb_iterator_size(stack), stack) {
+		tb_stack_put(args, item);
 	}
 	while (((ast*)tb_stack_last(stack))->type != 0) {
 		tb_stack_pop(stack);
