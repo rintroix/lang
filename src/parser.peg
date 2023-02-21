@@ -1,5 +1,5 @@
 %auxil "tb_stack_ref_t"
-%value "struct token"
+%value "struct ast"
 
 %source {
 #include <stdio.h>
@@ -16,22 +16,21 @@ list <- '(' _*            ')' { $$ = list0(); }
       / '(' _* a:atom  _* ')' { $$ = list1(a); }
       / '(' _* i:inner _* ')' { $$ = i; }
 
-inner <- o:oper { $$ = o; }
-       / d:dot  { $$ = d; }
+inner <- d:dot  { $$ = d; }
+       / o:oper { $$ = o; }
 	   / m:many { $$ = m; }
 
-oper <- l:operand _+ <op> _+ r:operand { $$ = oper(strdup($1), l, r); } 
+oper <- l:operand _+ <op> _+ r:operand { $$ = oper(tb_strdup($1), l, r); } 
 
 dot <- l:dotand _+ '.' _+ r:dotand { $$ = append(l, r); }
 
 operand <- i:inner { $$ = i; }
          / a:atom  { $$ = a; }
 
-dotand <- d:dot  { $$ = d; }
-        / m:many { $$ = m; }
-        / a:atom { $$ = list1(a); }
+dotand <- i:inner { $$ = i; }
+        / a:atom  { $$ = list1(a); }
 
-many <- matom (_+ matom)+ { $$ = list(auxil); }
+many <- { push(auxil, (ast){0}); } matom (_+ matom)+ { $$ = list(auxil); }
 
 matom <- l:list { push(auxil, l); }
        / w:word { push(auxil, w); }
@@ -43,7 +42,7 @@ op <- !'.' opchar / opchar opchar+
 
 opchar <- [!#$%&*+-./:;<=>?@\[\\\]^_`{|}~]
 
-word <- [_a-zA-Z0-9-]+ { $$ = word(strdup($0)); }
+word <- [_a-zA-Z0-9-]+ { $$ = word(tb_strdup($0)); }
 
 _ <- [ \t\n]
 
@@ -52,4 +51,3 @@ _ <- [ \t\n]
 # abcdefghijklmnopqrstuvwxyz
 # !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
 
-# / a:atom { $$ = *(token*)tb_stack_head(auxil); tb_stack_clear(auxil); }

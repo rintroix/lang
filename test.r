@@ -1,5 +1,10 @@
+(foo bar)
+(foo bar (hello world))
+(foo bar (hello world) xxx)
+(foo bar . baz)
+(foo bar (hello world) . baz)
+(foo bar . baz xxx)
 (fn add (a b) . a + b)
-
 (fn foo ()
   (add 1 2)
   (add 3 4))

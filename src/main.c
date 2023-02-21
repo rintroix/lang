@@ -8,225 +8,171 @@
 #include "common.h"
 #include "parser.h"
 
-tb_element_t token_element;
 tb_element_t ast_element;
 
-void print_token(token *t) {
-	switch(t->type) {
-	case T_LIST:
+void print_ast(ast *a) {
+	switch(a->type) {
+	case A_CALL:
 		printf("(");
 		int i = 0;
-		tb_for_all(token*, item, t->list.children) {
+		tb_for_all(ast*, item, a->call.args) {
 			if (i == 0)
 				i = 1;
 			else
 				printf(" ");
-			print_token(item);
+			print_ast(item);
 		}
 		printf(")");
 		break;
 
-	case T_WORD:
-		printf("%s", t->word.name);
+	// case A_CALL:
+	// 	printf("%s(", node->call.name);
+	// 	tb_for_all(ast*, item, node->call.args) {
+	// 		if (item != tb_list_head(node->call.args)) {
+	// 			printf(", ");
+	// 		}
+	// 		print_ast(item);
+	// 	}
+	// 	printf(")");
+	// 	break;
+
+	case A_REF:
+		printf("%s", a->ref.name);
 		break;
 
-	case T_OPER:
+	case A_OPER:
 		printf("(");
-		print_token(t->oper.left);
+		print_ast(a->oper.left);
 		printf(" ");
-		printf("%s", t->oper.name);
+		printf("%s", a->oper.name);
 		printf(" ");
-		print_token(t->oper.right);
+		print_ast(a->oper.right);
 		printf(")");
 		break;
 
 	default:
-		tb_trace_e("print_token: unhandled %d", t->type);
+		tb_trace_e("print_ast: unhandled %d", a->type);
 		abort();
 		break;
 	}
 }
 
-void printl_token(token *t) {
-	print_token(t);
+void printl_ast(ast *a) {
+	print_ast(a);
 	puts("");
 }
 
-token *lift(token t) {
-	token *ptr = malloc(sizeof(token));
-	*ptr = t;
+ast *lift(ast a) {
+	ast *ptr = malloc(sizeof(ast));
+	*ptr = a;
 	return ptr;
 }
 
-token word(char *name) {
-	return (token){ .type = T_WORD, .word = { .name = name } };
+ast word(char *name) {
+	return (ast){ .type = A_REF, .ref = { .name = name } };
 }
 
-token oper(char *name, token l, token r) {
-	return (token){ .type = T_OPER,
+ast oper(char *name, ast l, ast r) {
+	return (ast){ .type = A_OPER,
 		.oper = { .name = name, .left = lift(l), .right = lift(r) } };
 }
 
-token list(tb_stack_ref_t stack) {
-	tb_stack_ref_t children = tb_stack_init(tb_iterator_size(stack), token_element);
-	tb_stack_copy(children, stack);
-	tb_stack_clear(stack);
-	return (token){ .type = T_LIST, .list = { .children = children } };
+ast list(tb_stack_ref_t stack) {
+	tb_stack_ref_t args = tb_stack_init(tb_iterator_size(stack), ast_element);
+	int i = 0;
+	int n = 0;
+	tb_for_all(ast*, item, stack) {
+		if (item->type == 0) {
+			n = i + 1;
+		}
+		i += 1;
+	}
+	i = 0;
+	tb_for_all(ast*, item1, stack) {
+		if (i >= n) {
+			tb_stack_put(args, item1);
+		}
+		i += 1;
+	}
+	while (((ast*)tb_stack_last(stack))->type != 0) {
+		tb_stack_pop(stack);
+	}
+	tb_stack_pop(stack); // marker
+	return (ast){ .type = A_CALL, .call = { .args = args } };
 }
 
-token list0() {
-	tb_stack_ref_t children = tb_stack_init(0, token_element);
-	return (token){ .type = T_LIST, .list = { .children = children } };
+ast list0() {
+	tb_stack_ref_t args = tb_stack_init(0, ast_element);
+	return (ast){ .type = A_CALL, .call = { .args = args } };
 }
 
-token list1(token t) {
-	tb_stack_ref_t children = tb_stack_init(10, token_element);
-	tb_stack_put(children, &t);
-	return (token){ .type = T_LIST, .list = { .children = children } };
+ast list1(ast a) {
+	tb_stack_ref_t args = tb_stack_init(10, ast_element);
+	tb_stack_put(args, &a);
+	return (ast){ .type = A_CALL, .call = { .args = args } };
 }
 
-token append(token l, token t) {
-	tb_check_abort(l.type == T_LIST);
-	tb_stack_put(l.list.children, &t);
+ast append(ast l, ast a) {
+	tb_check_abort(l.type == A_CALL);
+	tb_stack_put(l.call.args, &a);
 	return l;
 }
 
-void push(tb_stack_ref_t stack, token t) {
-	tb_stack_put(stack, &t);
+void push(tb_stack_ref_t stack, ast a) {
+	tb_stack_put(stack, &a);
 }
 
-void destroy_ast(ast *node) {
-	switch (node->type) {
+void destroy_ast(ast *a) {
+	switch (a->type) {
 		case A_FN:
-			tb_free(node->fn.name);
-			tb_trace_noimpl();
+			tb_free(a->fn.name);
 			break;
 
 		case A_CALL:
-			tb_free(node->call.name);
-			tb_for_all(ast*, item, node->call.args) {
+			if (a->call.name)
+				tb_free(a->call.name); // TODO hack, need empty list ast
+			tb_for_all(ast*, item, a->call.args) {
 				destroy_ast(item);
 			}
-			tb_list_clear(node->call.args);
-			tb_list_exit(node->call.args);
+			tb_stack_clear(a->call.args);
+			tb_stack_exit(a->call.args);
 			break;
 
 		case A_REF:
-			tb_free(node->ref.name);
+			tb_free(a->ref.name);
 			break;
 
 		case A_DEF:
-			tb_free(node->def.name);
-			tb_trace_noimpl();
+			tb_free(a->def.name);
+			break;
+
+		case A_OPER:
+			tb_free(a->oper.name);
+			if (a->oper.left) destroy_ast(a->oper.left);
+			if (a->oper.right) destroy_ast(a->oper.right);
 			break;
 	}
 }
 
-ast token_to_ast(token *t) {
-	switch(t->type) {
-	case T_LIST:;
-		tb_list_ref_t children = t->list.children;
-		token *head = tb_list_head(children);
-
-		if (head->type == T_WORD) {
-			char *name = head->word.name;
-			tb_list_ref_t args = tb_list_init(0, ast_element);
-			tb_for_all(token*, item, children) {
-				if (item == head) continue;
-				ast a = token_to_ast(item);
-				tb_list_insert_tail(args, &a);
-			}
-			tb_list_clear(children);
-			tb_list_exit(children);
-			return (ast) {
-				.type = A_CALL,
-					.call = {
-						.name = name,
-						.args = args,
-					},
-			};
-		} else {
-			tb_trace_e("FIXME bad call head %d", head->type);
-			printf(" -> ");
-			printl_token(t);
-			abort();
-		}
-		break;
-
-	case T_WORD:;
-		return (ast) {
-			.type = A_REF,
-			.ref = {
-				.name = t->word.name,
-			},
-		};
-		break;
-
-	case T_OPER:;
-		return (ast) {
-			.type = A_REF,
-			.ref = {
-				.name = t->atom.name,
-			},
-		};
-		break;
-
-	default:
-		tb_trace_e("unexpected token type %d", head->type);
-		abort();
-		break;
-	}
-}
-
-void print_ast(ast *node) {
-	switch (node->type) {
-		case A_FN:
-			tb_trace_noimpl();
-			break;
-
-		case A_CALL:
-			printf("%s(", node->call.name);
-			tb_for_all(ast*, item, node->call.args) {
-				if (item != tb_list_head(node->call.args)) {
-					printf(", ");
-				}
-				print_ast(item);
-			}
-			printf(")");
-			break;
-
-		case A_REF:
-			printf("%s", node->ref.name);
-			break;
-
-		case A_DEF:
-			tb_trace_noimpl();
-			break;
-	}
-}
-
-void manage_token(token *t) {
-	printl_token(t);
-	ast node = token_to_ast(t);
-	print_ast(&node);
-	destroy_ast(&node);
+void manage_ast(ast *a) {
+	printl_ast(a);
+	destroy_ast(a);
 }
 
 int main() {
 	tb_check_abort(tb_init(0, 0));
 
-	token_element = tb_element_mem(sizeof(token), 0, 0);
 	ast_element = tb_element_mem(sizeof(ast), 0, 0);
 
-	tb_stack_ref_t stack = tb_stack_init(128, token_element);
+	tb_stack_ref_t stack = tb_stack_init(128, ast_element);
 
-	token t;
+	ast a;
 	pcc_context_t *ctx = pcc_create(stack);
-	while(pcc_parse(ctx, &t)) {
-		manage_token(&t);
+	while(pcc_parse(ctx, &a)) {
+		manage_ast(&a);
 	}
-	if (t.type != 0) {
-		manage_token(&t);
+	if (a.type != 0) {
+		manage_ast(&a);
 	}
 	pcc_destroy(ctx);
 
@@ -234,5 +180,5 @@ int main() {
 	tb_stack_exit(stack);
 	tb_trace_d("END");
 
-	tb_exit();
+	// tb_exit();
 }
