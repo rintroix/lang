@@ -32,11 +32,15 @@ dotand <- i:inner { $$ = i; }
 
 many <- { push(auxil, (ast){0}); } matom (_+ matom)+ { $$ = list(auxil); }
 
-matom <- l:list { push(auxil, l); }
-       / w:word { push(auxil, w); }
+matom <- l:list    { push(auxil, l); }
+       / k:keyword { push(auxil, k); }
+       / w:word    { push(auxil, w); }
 
-atom <- l:list { $$ = l; }
-      / w:word { $$ = w; }
+atom <- l:list    { $$ = l; }
+      / k:keyword { $$ = k; }
+      / w:word    { $$ = w; }
+
+keyword <- ':' w:word { $$ = keyword(w.ref.name); }
 
 op <- !'.' opchar / opchar opchar+ 
 

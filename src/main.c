@@ -25,16 +25,9 @@ void print_ast(ast *a) {
 		printf(")");
 		break;
 
-	// case A_CALL:
-	// 	printf("%s(", node->call.name);
-	// 	tb_for_all(ast*, item, node->call.args) {
-	// 		if (item != tb_list_head(node->call.args)) {
-	// 			printf(", ");
-	// 		}
-	// 		print_ast(item);
-	// 	}
-	// 	printf(")");
-	// 	break;
+	case A_KW:
+		printf(":%s", a->kw.name);
+		break;
 
 	case A_REF:
 		printf("%s", a->ref.name);
@@ -66,6 +59,10 @@ ast *lift(ast a) {
 	ast *ptr = malloc(sizeof(ast));
 	*ptr = a;
 	return ptr;
+}
+
+ast keyword(char *name) {
+	return (ast){ .type = A_KW, .kw = { .name = name } };
 }
 
 ast word(char *name) {
@@ -102,7 +99,7 @@ ast list0() {
 }
 
 ast list1(ast a) {
-	tb_stack_ref_t args = tb_stack_init(10, ast_element);
+	tb_stack_ref_t args = tb_stack_init(1, ast_element);
 	tb_stack_put(args, &a);
 	return (ast){ .type = A_CALL, .call = { .args = args } };
 }
