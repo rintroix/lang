@@ -130,6 +130,10 @@ void destroy_ast(ast *a) {
 			tb_stack_exit(a->call.args);
 			break;
 
+		case A_KW:
+			tb_free(a->kw.name);
+			break;
+
 		case A_REF:
 			tb_free(a->ref.name);
 			break;
