@@ -3,7 +3,7 @@
 
 #include "tbox/tbox.h"
 
-enum ast_type { A_FN = 1, A_CALL, A_KW, A_REF, A_DEF, A_OPER };
+enum ast_type { A_FN, A_CALL, A_KW, A_REF, A_DEF, A_OPER, A_MARK };
 
 typedef struct ast {
 	enum ast_type type;

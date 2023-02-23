@@ -30,7 +30,7 @@ operand <- i:inner { $$ = i; }
 dotand <- i:inner { $$ = i; }
         / a:atom  { $$ = list1(a); }
 
-many <- { push(auxil, (ast){0}); } matom (_+ matom)+ { $$ = list(auxil); }
+many <- { push(auxil, (ast){.type=A_MARK}); } matom (_+ matom)+ { $$ = list(auxil); }
 
 matom <- l:list    { push(auxil, l); }
        / k:keyword { push(auxil, k); }

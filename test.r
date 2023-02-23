@@ -1,10 +1,5 @@
-(foo bar)
-(foo bar (hello world))
-(foo bar (hello (world (1 2 3) . (3 4 5))) xxx)
-(foo bar . baz)
-(foo bar (hello world) . baz)
-(foo bar . baz xxx)
-(fn add (a :int b :int) . a + b)
-(fn foo ()
+(fn add :int (a :int b :int) . a + b)
+
+(fn main :int ()
   (add 1 2)
   (add 3 4))
