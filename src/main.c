@@ -1,4 +1,3 @@
-#include "tbox/prefix/trace.h"
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -8,6 +7,7 @@
 
 #include "common.h"
 #include "parser.h"
+#include "string.h"
 
 tb_element_t ast_element;
 tb_element_t ast_ref_element;
@@ -82,6 +82,10 @@ tb_bool_t ismark(tb_iterator_ref_t iterator, tb_cpointer_t item, tb_cpointer_t v
 	return ((ast*)item)->type == A_MARK;
 }
 
+ast call(tb_stack_ref_t args) {
+	return (ast){ .type = A_CALL, .call = { .args = args } };
+}
+
 ast list(tb_stack_ref_t stack) {
 	tb_stack_ref_t args = tb_stack_init(tb_iterator_size(stack), ast_element);
 	size_t mark = tb_rfind_if(stack, 0, tb_iterator_size(stack), ismark, 0);
@@ -92,18 +96,18 @@ ast list(tb_stack_ref_t stack) {
 		tb_stack_pop(stack);
 	}
 	tb_stack_pop(stack); // mark
-	return (ast){ .type = A_CALL, .call = { .args = args } };
+	return call(args);
 }
 
 ast list0() {
 	tb_stack_ref_t args = tb_stack_init(0, ast_element);
-	return (ast){ .type = A_CALL, .call = { .args = args } };
+	return call(args);
 }
 
 ast list1(ast a) {
 	tb_stack_ref_t args = tb_stack_init(1, ast_element);
 	tb_stack_put(args, &a);
-	return (ast){ .type = A_CALL, .call = { .args = args } };
+	return call(args);
 }
 
 ast append(ast l, ast a) {
@@ -166,30 +170,59 @@ void compile(ast *a) {
 	comp(context, a);
 }
 
-int is(tb_iterator_ref_t iter, tb_size_t i, enum ast_type t) {
-	ast *a = (ast*)tb_iterator_item(iter, i);
-	return a->type == t;
+int _match(tb_list_ref_t list, ast *pat) {
+	tb_for_all(ast*, a, list) {
+		if (pat->type == A_MARK)
+			break;
+
+		if (a->type != pat->type) {
+			return 0;
+		}
+
+		switch(pat->type) {
+			case A_CALL:
+				break;
+			case A_REF:
+				if (pat->ref.name && 0 != strcmp(pat->ref.name, a->ref.name)) {
+					return 0;
+				}
+				break;
+			case A_KW:
+				if (pat->kw.name && 0 != strcmp(pat->kw.name, a->kw.name))
+					return 0;
+				break;
+			default:
+				tb_trace_e("match unhandled for %d", pat->type);
+				tb_abort();
+				break;
+		}
+
+		pat++;
+	}	
+
+	return 1;
 }
 
-// int isref(tb_iterator_ref_t iter, tb_size_t i, char *name) {
-// 	return is(iter, i, A_REF) && 
-// }
+#define match(list, ...) _match(list, (ast[]){__VA_ARGS__, (ast){.type=A_MARK}})
 
-int match(tb_list_ref_t list, ast *pattern) {
-	return 0;
-}
+#define get(x, y) ((ast*)tb_iterator_item(x, y))
 
-#define MATCH(list, ...) match(list, (ast[]){__VA_ARGS__, (ast){.type=A_MARK}})
+#define W(x) word(x)
+#define L(x) call(x)
+#define K(x) keyword(x)
 
 ast *transform(tb_list_ref_t macros, ast *a) {
 	// TODO macro transforms first
 
 	if (a->type == A_CALL) {
-		tb_iterator_ref_t args = a->call.args;
-		if (is(args, 0, A_REF))
-
-		if (MATCH(args, word("fn"), word(0), keyword(0)))
+		tb_iterator_ref_t list = a->call.args;
+		if (match(list, W("fn"), W(0), K(0), L(0))) {
 			puts("MATCHED");
+			char *name = get(list, 1)->ref.name;
+			char *ret  = get(list, 2)->kw.name;
+			tb_iterator_ref_t args = get(list, 3)->call.args;
+			tb_trace_i("num args %d", tb_iterator_size(args));
+		}
 	}
 	return a;
 }
