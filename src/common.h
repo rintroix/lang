@@ -11,6 +11,9 @@ typedef struct ast {
 	union {
 		struct {
 			char *name;
+			char *type;
+			tb_iterator_ref_t args;
+			struct ast *body;
 		} fn;
 
 		struct {
@@ -20,6 +23,7 @@ typedef struct ast {
 
 		struct {
 			char *name;
+			char *type;
 		} def;
 
 		struct {
