@@ -221,7 +221,7 @@ ast *transform(tb_list_ref_t macros, ast *a) {
 			char *name = get(list, 1)->id.name;
 			char *ret  = get(list, 2)->id.name;
 			tb_iterator_ref_t args = funargs(get(list, 3)->call.args);
-			tb_trace_i("FN %s ARGS %d", name, tb_iterator_size(args));
+			tb_trace_i("FUN %s ARGS %d", name, tb_iterator_size(args));
 		}
 	}
 	return a;

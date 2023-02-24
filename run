@@ -1,5 +1,0 @@
-#!/bin/sh
-
-xmake build && xmake run < test.r
-
-cat test.r
