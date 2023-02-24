@@ -27,11 +27,9 @@ void print_ast(ast *a) {
 		printf(")");
 		break;
 
-	case A_KW:
-		printf(":%s", a->kw.name);
-		break;
-
 	case A_ID:
+		if (a->id.type == I_KW)
+			printf(":");
 		printf("%s", a->id.name);
 		break;
 
@@ -63,17 +61,20 @@ ast *lift(ast a) {
 	return ptr;
 }
 
-ast keyword(char *name) {
-	return (ast){ .type = A_KW, .kw = { .name = name } };
+ast kw(char *name) {
+	return (ast){ .type = A_ID, .id = { .name = name, .type = I_KW } };
 }
 
 ast word(char *name) {
-	return (ast){ .type = A_ID, .id= { .name = name } };
+	return (ast){ .type = A_ID, .id = { .name = name, .type = I_WORD } };
+}
+
+ast op(char *name) {
+	return (ast){ .type = A_ID, .id = { .name = name, .type = I_OP } };
 }
 
 ast oper(char *name, ast l, ast r) {
-	return (ast){ .type = A_OPER,
-		.oper = { .name = name, .left = lift(l), .right = lift(r) } };
+	return (ast){ .type = A_OPER, .oper = { .name = name, .left = lift(l), .right = lift(r) } };
 }
 
 tb_bool_t ismark(tb_iterator_ref_t iterator, tb_cpointer_t item, tb_cpointer_t value) {
@@ -136,10 +137,6 @@ void destroy_ast(ast *a) {
 			tb_stack_exit(a->call.args);
 			break;
 
-		case A_KW:
-			tb_free(a->kw.name);
-			break;
-
 		case A_ID:
 			tb_free(a->id.name);
 			break;
@@ -170,6 +167,12 @@ void compile(ast *a) {
 	comp(context, a);
 }
 
+tb_iterator_ref_t funargs(tb_iterator_ref_t list) {
+	tb_vector_ref_t out = tb_vector_init(tb_iterator_size(list), ast_element);
+	
+	return out;
+}
+
 int _match(tb_list_ref_t list, ast *pat) {
 	tb_for_all(ast*, a, list) {
 		if (pat->type == A_MARK)
@@ -183,13 +186,9 @@ int _match(tb_list_ref_t list, ast *pat) {
 			case A_CALL:
 				break;
 			case A_ID:
-				if (pat->id.name && 0 != strcmp(pat->id.name, a->id.name)) {
+				if (pat->id.name && pat->id.type == a->id.type && 0 != strcmp(pat->id.name, a->id.name)) {
 					return 0;
 				}
-				break;
-			case A_KW:
-				if (pat->kw.name && 0 != strcmp(pat->kw.name, a->kw.name))
-					return 0;
 				break;
 			default:
 				tb_trace_e("match unhandled for %d", pat->type);
@@ -209,19 +208,20 @@ int _match(tb_list_ref_t list, ast *pat) {
 
 #define W(x) word(x)
 #define L(x) call(x)
-#define K(x) keyword(x)
+#define K(x) kw(x)
+#define O(x) op(x)
 
 ast *transform(tb_list_ref_t macros, ast *a) {
-	// TODO macro transforms first
+	// TODO compactor first
 
 	if (a->type == A_CALL) {
 		tb_iterator_ref_t list = a->call.args;
 		if (match(list, W("fn"), W(0), K(0), L(0))) {
 			puts("MATCHED");
 			char *name = get(list, 1)->id.name;
-			char *ret  = get(list, 2)->kw.name;
-			tb_iterator_ref_t args = get(list, 3)->call.args;
-			tb_trace_i("num args %d", tb_iterator_size(args));
+			char *ret  = get(list, 2)->id.name;
+			tb_iterator_ref_t args = funargs(get(list, 3)->call.args);
+			tb_trace_i("FN %s ARGS %d", name, tb_iterator_size(args));
 		}
 	}
 	return a;

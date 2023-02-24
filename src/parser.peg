@@ -17,32 +17,29 @@ list <- '(' _*            ')' { $$ = list0(); }
       / '(' _* i:inner _* ')' { $$ = i; }
 
 inner <- d:dot  { $$ = d; }
-       / o:oper { $$ = o; }
 	   / m:many { $$ = m; }
 
-oper <- l:operand _+ <op> _+ r:operand { $$ = oper(tb_strdup($1), l, r); } 
+dot <- l:subdot _+ '.' _+ r:subdot { $$ = append(l, r); }
 
-dot <- l:dotand _+ '.' _+ r:dotand { $$ = append(l, r); }
-
-operand <- i:inner { $$ = i; }
-         / a:atom  { $$ = a; }
-
-dotand <- i:inner { $$ = i; }
+subdot <- i:inner { $$ = i; }
         / a:atom  { $$ = list1(a); }
 
 many <- { push(auxil, (ast){.type=A_MARK}); } matom (_+ matom)+ { $$ = list(auxil); }
 
 matom <- l:list    { push(auxil, l); }
        / k:keyword { push(auxil, k); }
+	   / o:oper    { push(auxil, o); }
        / w:word    { push(auxil, w); }
 
 atom <- l:list    { $$ = l; }
       / k:keyword { $$ = k; }
+      / o:oper    { $$ = o; }
       / w:word    { $$ = w; }
 
-keyword <- ':' w:word { $$ = keyword(w.ref.name); }
+keyword <- ':' w:word { w.id.type = I_KW; $$ = w; }
 
-op <- !'.' opchar / opchar opchar+ 
+oper <- !'.' opchar    { $$ = op(tb_strdup($0)); }
+      / opchar opchar+ { $$ = op(tb_strdup($0)); }
 
 opchar <- [!#$%&*+-./:;<=>?@\[\\\]^_`{|}~]
 
