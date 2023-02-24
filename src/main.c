@@ -31,8 +31,8 @@ void print_ast(ast *a) {
 		printf(":%s", a->kw.name);
 		break;
 
-	case A_REF:
-		printf("%s", a->ref.name);
+	case A_ID:
+		printf("%s", a->id.name);
 		break;
 
 	case A_OPER:
@@ -68,7 +68,7 @@ ast keyword(char *name) {
 }
 
 ast word(char *name) {
-	return (ast){ .type = A_REF, .ref = { .name = name } };
+	return (ast){ .type = A_ID, .id= { .name = name } };
 }
 
 ast oper(char *name, ast l, ast r) {
@@ -140,8 +140,8 @@ void destroy_ast(ast *a) {
 			tb_free(a->kw.name);
 			break;
 
-		case A_REF:
-			tb_free(a->ref.name);
+		case A_ID:
+			tb_free(a->id.name);
 			break;
 
 		case A_DEF:
@@ -182,8 +182,8 @@ int _match(tb_list_ref_t list, ast *pat) {
 		switch(pat->type) {
 			case A_CALL:
 				break;
-			case A_REF:
-				if (pat->ref.name && 0 != strcmp(pat->ref.name, a->ref.name)) {
+			case A_ID:
+				if (pat->id.name && 0 != strcmp(pat->id.name, a->id.name)) {
 					return 0;
 				}
 				break;
@@ -218,7 +218,7 @@ ast *transform(tb_list_ref_t macros, ast *a) {
 		tb_iterator_ref_t list = a->call.args;
 		if (match(list, W("fn"), W(0), K(0), L(0))) {
 			puts("MATCHED");
-			char *name = get(list, 1)->ref.name;
+			char *name = get(list, 1)->id.name;
 			char *ret  = get(list, 2)->kw.name;
 			tb_iterator_ref_t args = get(list, 3)->call.args;
 			tb_trace_i("num args %d", tb_iterator_size(args));
