@@ -3,7 +3,7 @@
 
 #include "tbox/tbox.h"
 
-enum ast_type { A_FN, A_CALL, A_ID, A_DEF, A_OPER, A_MARK };
+enum ast_type { A_FN, A_CALL, A_ID, A_DEF, A_OPER, A_BLOCK, A_MARK };
 enum id_type { I_WORD, I_KW, I_OP };
 
 typedef struct ast {
@@ -18,7 +18,7 @@ typedef struct ast {
 
 		struct {
 			char *name;
-			tb_stack_ref_t args;
+			tb_iterator_ref_t args;
 		} call;
 
 		struct {
@@ -36,6 +36,10 @@ typedef struct ast {
 			struct ast *left;
 			struct ast *right;
 		} oper;
+
+		struct {
+			tb_iterator_ref_t items;
+		} block;
 	};
 } ast;
 

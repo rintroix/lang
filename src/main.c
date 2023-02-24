@@ -12,6 +12,24 @@
 tb_element_t ast_element;
 tb_element_t ast_ref_element;
 
+#define todo                                                                   \
+	do {                                                                   \
+		tb_trace_noimpl();                                             \
+		tb_abort();                                                    \
+	} while (0)
+
+#define bug(...)                                                               \
+	do {                                                                   \
+		tb_trace_e("compiler bug: " __VA_ARGS__);                      \
+		exit(2);                                                       \
+	} while (0)
+
+#define error(...)                                                             \
+	do {                                                                   \
+		tb_trace_e(__VA_ARGS__);                                       \
+		exit(1);                                                       \
+	} while (0)
+
 void print_ast(ast *a)
 {
 	switch (a->type) {
@@ -46,8 +64,7 @@ void print_ast(ast *a)
 		break;
 
 	default:
-		tb_trace_e("print_ast: unhandled %d", a->type);
-		abort();
+		bug("%s: unhandled %d", __func__, a->type);
 		break;
 	}
 }
@@ -78,6 +95,16 @@ ast word(char *name)
 ast op(char *name)
 {
 	return (ast){.type = A_ID, .id = {.name = name, .type = I_OP}};
+}
+
+ast block(tb_iterator_ref_t items)
+{
+	return (ast){.type = A_BLOCK, .block = {.items = items}};
+}
+
+ast def(char *name, char *type)
+{
+	return (ast){.type = A_DEF, .def = {.name = name, .type = type}};
 }
 
 ast oper(char *name, ast l, ast r)
@@ -172,24 +199,54 @@ void destroy_ast(ast *a)
 		break;
 
 	case A_MARK:
-		tb_trace_e("compiler bug: mark destroyed");
-		tb_abort();
+		bug("mark");
 		break;
 	}
 }
 
-void comp(tb_list_ref_t context, ast *a)
+void compile(tb_list_ref_t context, ast *a)
 {
-	// switch (a->type) {
-	// case A_FN:
-	//                 break;
-	// }
-}
+	switch (a->type) {
+	case A_FN:
+		printf("%s %s(", a->fn.type, a->fn.name);
+		printf(") {\n");
+		tb_for_all(ast *, b, a->fn.body->block.items)
+		{
+			compile(context, b);
+			puts(";");
+		}
+		printf("}");
+		puts("");
+		break;
 
-void compile(ast *a)
-{
-	tb_list_ref_t context = tb_list_init(0, ast_ref_element);
-	comp(context, a);
+	case A_CALL:
+		printf("%s(", a->call.name);
+		tb_for_all(ast *, arg, a->call.args)
+		{
+			if (arg != tb_iterator_item(a->call.args, 0))
+				printf(", ");
+			compile(context, arg);
+		}
+		printf(")");
+		todo;
+		break;
+
+	case A_DEF:
+		todo;
+		break;
+
+	case A_ID:
+		bug("%s: id", __func__);
+		break;
+
+	case A_OPER:
+		todo;
+		break;
+
+	case A_MARK:
+		bug("%s: mark", __func__);
+		break;
+	}
 }
 
 tb_iterator_ref_t funargs(tb_iterator_ref_t list)
@@ -197,7 +254,64 @@ tb_iterator_ref_t funargs(tb_iterator_ref_t list)
 	tb_vector_ref_t out =
 	    tb_vector_init(tb_iterator_size(list), ast_element);
 
+	ast *last = 0;
+	tb_for_all(ast *, arg, list)
+	{
+		if (arg->type != A_ID)
+			error("fun arg not an identifier");
+
+		switch (arg->id.type) {
+		case I_WORD:;
+			ast *d = lift(def(arg->id.name, 0));
+			last = d;
+			tb_vector_insert_tail(out, d);
+			break;
+
+		case I_KW:
+			if (last->def.type)
+				error("several keywords after fun arg");
+			last->def.type = arg->id.name;
+			break;
+
+		default:
+			error("unexpected fun arg type: %d", arg->type);
+			break;
+		}
+	}
+
 	return out;
+}
+
+int has(tb_iterator_ref_t list, ast a)
+{
+	tb_for_all(ast *, item, list)
+	{
+		if (item->type != a.type)
+			continue;
+
+		switch (a.type) {
+		case A_ID:
+			if (a.id.type != item->id.type)
+				continue;
+
+			if (!a.id.name)
+				return 1;
+			else if (0 == strcmp(a.id.name, item->id.name))
+				return 1;
+			else
+				return 0;
+			break;
+
+		default:
+			bug("%s: unhandled %d", __func__, a.type);
+		}
+	}
+
+	return 0;
+}
+
+ast *operate(tb_iterator_ref_t list) {
+	return 0;
 }
 
 int _match(tb_list_ref_t list, ast *pat)
@@ -221,8 +335,7 @@ int _match(tb_list_ref_t list, ast *pat)
 			}
 			break;
 		default:
-			tb_trace_e("match unhandled for %d", pat->type);
-			tb_abort();
+			bug("match unhandled for %d", pat->type);
 			break;
 		}
 
@@ -248,13 +361,19 @@ ast *transform(tb_list_ref_t macros, ast *a)
 
 	if (a->type == A_CALL) {
 		tb_iterator_ref_t list = a->call.args;
+		tb_vector_ref_t bodies = tb_vector_init(10, ast_element);
 		if (match(list, W("fn"), W(0), K(0), L(0))) {
 			puts("MATCHED");
 			char *name = get(list, 1)->id.name;
 			char *type = get(list, 2)->id.name;
 			tb_iterator_ref_t args =
 			    funargs(get(list, 3)->call.args);
-			ast *body = lift((ast){});
+			tb_for(ast *, b, 4, tb_iterator_tail(list), list)
+			{
+				ast *bt = transform(macros, b);
+				tb_vector_insert_tail(bodies, bt);
+			}
+			ast *body = lift(block(bodies));
 
 			return lift((ast){
 			    .type = A_FN,
@@ -266,8 +385,11 @@ ast *transform(tb_list_ref_t macros, ast *a)
 				    .body = body,
 				},
 			});
+		} else if (has(list, O(0))) {
+			// return operate(list);
 		}
 	}
+
 	return a;
 }
 
@@ -276,7 +398,10 @@ void manage_ast(ast *a)
 	printl_ast(a);
 	tb_list_ref_t macros = tb_list_init(0, tb_element_ptr(0, 0));
 	ast *b = transform(macros, a);
-	compile(b);
+	tb_list_ref_t context = tb_list_init(0, ast_ref_element);
+	compile(context, b);
+	tb_list_clear(context);
+	tb_list_exit(context);
 	destroy_ast(b);
 }
 
