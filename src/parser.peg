@@ -34,12 +34,12 @@ atom <- l:list    { $$ = l; }
 
 keyword <- ':' w:word { w.id.type = I_KW; $$ = w; }
 
+word <- [_a-zA-Z0-9-]+ { $$ = word(tb_strdup($0)); }
+
 oper <- !'.' opchar    { $$ = op(tb_strdup($0)); }
       / opchar opchar+ { $$ = op(tb_strdup($0)); }
 
 opchar <- [!#$%&*+-./:;<=>?@\[\\\]^_`{|}~]
-
-word <- [_a-zA-Z0-9-]+ { $$ = word(tb_strdup($0)); }
 
 _ <- [ \t\n]
 

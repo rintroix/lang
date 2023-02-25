@@ -11,6 +11,8 @@
 tb_element_t ast_element;
 tb_element_t ast_ref_element;
 
+ast *transform(tb_iterator_ref_t macros, ast *a);
+
 #define todo                                                                   \
 	do {                                                                   \
 		tb_trace_noimpl();                                             \
@@ -100,6 +102,10 @@ void print_ast(ast *a)
 		printf(")");
 	} break;
 
+	case A_FN: {
+		printf("FN %s", a->fn.name);
+	} break;
+
 	case A_CALL: {
 		printf("(");
 		int i = 0;
@@ -143,7 +149,7 @@ void printl_ast(ast *a)
 
 ast *lift(ast a)
 {
-	ast *ptr = malloc(sizeof(ast));
+	ast *ptr = tb_malloc(sizeof(ast));
 	*ptr = a;
 	return ptr;
 }
@@ -232,8 +238,14 @@ void compile(tb_list_ref_t context, ast *a)
 	case A_FN: {
 		printf("%s %s(", a->fn.type, a->fn.name);
 		printf(") {\n");
-		tb_for_all(ast *, item, a->fn.body->block.items)
+		ast *body = a->fn.body;
+		tb_assert(body->block.items);
+		tb_trace_i("BODY HAS %lu items",
+			   tb_iterator_size(body->block.items));
+		puts("HERE YET");
+		tb_for_all(ast *, item, body->block.items)
 		{
+				printl_ast(item);
 			compile(context, item);
 			puts(";");
 		}
@@ -254,7 +266,6 @@ void compile(tb_list_ref_t context, ast *a)
 			compile(context, arg);
 		}
 		printf(")");
-		todo;
 	} break;
 
 	case A_DEF:
@@ -266,7 +277,15 @@ void compile(tb_list_ref_t context, ast *a)
 		break;
 
 	case A_OPER:
-		todo;
+		printf("(");
+		printf(" ");
+		compile(context, a->oper.left);
+		printf(" ");
+		printf("%s", a->oper.name);
+		printf(" ");
+		compile(context, a->oper.left);
+		printf(" ");
+		printf(")");
 		break;
 
 	case A_BLOCK:
@@ -312,33 +331,30 @@ tb_iterator_ref_t funargs(tb_iterator_ref_t list)
 	return out;
 }
 
-ast _operate(tb_iterator_ref_t macros, tb_iterator_ref_t list, tb_size_t start)
+ast* _operate(tb_iterator_ref_t macros, tb_iterator_ref_t list, tb_size_t start)
 {
 	tb_size_t pos = tb_find_if(list, start, tb_iterator_tail(list), it_is, O(0));
+	tb_size_t end = tb_iterator_tail(list);
 
 	if (pos == start) {
 		bug("%s: operator without left side", __func__);
 	}
 
-	if (pos == tb_iterator_tail(list)) {
-		bug("%s: no operator", __func__);
-		// TODO next return whole slice
+	if (pos == end) {
+		return transform(macros, &list(slice(list, start, end)));
 	}
 
 	tb_assert(pos > start);
 
-	tb_vector_ref_t left = slice(list, start, pos - 1);
-
 	ast *op = tb_iterator_item(list, pos);
-	tb_trace_d("TTT %s %d %d", op->id.name, op->type, op->id.type);
 	tb_assert(op->type == A_ID && op->id.type == I_OP);
 
-	// TODO macros
+	ast *left = transform(macros, &list(slice(list, start, pos - 1)));
 
-	return oper(op->id.name, list(left), _operate(macros, list, pos + 1));
+	return lift(oper(op->id.name, left, _operate(macros, list, pos + 1)));
 }
 
-ast operate(tb_iterator_ref_t macros, tb_iterator_ref_t list)
+ast* operate(tb_iterator_ref_t macros, tb_iterator_ref_t list)
 {
 	return _operate(macros, list, 0);
 }
@@ -372,52 +388,67 @@ ast *transform(tb_iterator_ref_t macros, ast *a)
 {
 	// TODO compactor first
 
-	if (a->type == A_LIST) {
-		tb_iterator_ref_t items = a->list.items;
-		tb_vector_ref_t bodies = tb_vector_init(10, ast_element);
-		tb_trace_d("LIST SIZE %d", tb_iterator_size(items));
-		printl_ast(a);
-		if (match(items, W("fn"), W(0), K(0), L(0))) {
-			puts("MATCHED");
-			char *name = get(items, 1)->id.name;
-			char *type = get(items, 2)->id.name;
-			tb_iterator_ref_t args =
-			    funargs(get(items, 3)->list.items);
-			tb_for(ast *, b, 4, tb_iterator_tail(items), items)
-			{
-				ast *bt = transform(macros, b);
-				tb_vector_insert_tail(bodies, bt);
-			}
-			ast *body = lift(block(bodies));
+	if (a->type != A_LIST)
+		return a;
 
-			return lift((ast){
-			    .type = A_FN,
-			    .fn =
-				{
-				    .name = name,
-				    .args = args,
-				    .type = type,
-				    .body = body,
-				},
-			});
-		} else if (has(items, O(0))) {
-			return lift(operate(macros, items));
+	tb_iterator_ref_t items = a->list.items;
+	if (match(items, W("fn"), W(0), K(0), L(0))) {
+		puts("MATCHED");
+		char *name = get(items, 1)->id.name;
+		char *type = get(items, 2)->id.name;
+		tb_trace_i("FUN %s :%s", name, type);
+		tb_iterator_ref_t args = funargs(get(items, 3)->list.items);
+		// TODO block
+		tb_vector_ref_t bodies = tb_vector_init(10, ast_element);
+		tb_for(ast *, b, 4, tb_iterator_tail(items), items)
+		{
+			puts("PRE");
+			printl_ast(b);
+			ast *bt = transform(macros, b);
+			puts("POST");
+			printl_ast(bt);
+			tb_vector_insert_tail(bodies, bt);
 		}
+		ast *body = lift(block(bodies));
+
+		return lift((ast){
+		    .type = A_FN,
+		    .fn =
+			{
+			    .name = name,
+			    .args = args,
+			    .type = type,
+			    .body = body,
+			},
+		});
+	} else if (has(items, O(0))) {
+		return operate(macros, items);
 	}
 
-	return a;
+	
+
+	// CALL
+	tb_iterator_ref_t args = a->list.items;
+
+	return lift((ast){.type = A_CALL,
+			  .call = {
+			      .name = "FOO",
+			      .args = args,
+			  }});
 }
 
 void manage_ast(ast *a)
 {
 	printl_ast(a);
-	tb_list_ref_t macros = tb_list_init(0, tb_element_ptr(0, 0));
+	tb_vector_ref_t macros = tb_vector_init(10, tb_element_ptr(0, 0));
 	ast *b = transform(macros, a);
-	tb_list_ref_t context = tb_list_init(0, ast_ref_element);
+	printl_ast(b);
+	// NEXT infer and transform ID to REF
+ 	tb_list_ref_t context = tb_list_init(0, ast_ref_element);
 	compile(context, b);
-	tb_list_clear(context);
-	tb_list_exit(context);
-	destroy_ast(b);
+	// tb_list_clear(context);
+	// tb_list_exit(context);
+	// destroy_ast(b);
 }
 
 int main()

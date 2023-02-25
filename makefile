@@ -14,7 +14,8 @@ release: build/release/app
 
 build/%/app: APPFLAGS += -lm -Ibuild/$* -Isrc -I$(tbox)/src
 build/%/app: src/main.c build/%/parser.c build/%/libtbox.a | build/%/
-	$(CC) $(CFLAGS) $(APPFLAGS) $^ -o $@
+	@echo cc '' $@
+	@$(CC) $(CFLAGS) $(APPFLAGS) $^ -o $@
 
 build/%/libtbox.a: $(tbox)/build/$(os)/$(arch)/%/libtbox.a | build/%/
 	@cp $< $@
@@ -24,10 +25,12 @@ $(tbox)/build/$(os)/$(arch)/%/libtbox.a:
 	cd $(tbox) && ./configure --mode=$* --demo=no && make
 
 build/%/parser.c: src/parser.peg | build/packcc build/%/
+	@echo peg $<
 	@cd build/$*/ && ../packcc -o parser ../../$^
  
 build/packcc: external/packcc/src/packcc.c | build/
-	$(CC) $(CFLAGS) $^ -o $@
+	@echo cc '' $@
+	@$(CC) $(CFLAGS) $^ -o $@
 
 %/:
 	@mkdir -p $@

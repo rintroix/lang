@@ -94,8 +94,8 @@ typedef struct ast {
 	{                                                                      \
 		.type = A_OPER, .oper = {                                      \
 			.name = (N),                                           \
-			.left = lift(L),                                       \
-			.right = lift(R)                                       \
+			.left = (L),                                           \
+			.right = (R)                                           \
 		}                                                              \
 	}
 
