@@ -3,7 +3,7 @@
 
 #include "tbox/tbox.h"
 
-enum ast_type { A_FN, A_CALL, A_ID, A_DEF, A_OPER, A_BLOCK, A_MARK };
+enum ast_type { A_FN, A_LIST, A_CALL, A_ID, A_DEF, A_OPER, A_BLOCK, A_MARK };
 enum id_type { I_WORD, I_KW, I_OP };
 
 typedef struct ast {
@@ -15,6 +15,10 @@ typedef struct ast {
 			tb_iterator_ref_t args;
 			struct ast *body;
 		} fn;
+
+		struct {
+			tb_iterator_ref_t items;
+		} list;
 
 		struct {
 			char *name;
@@ -48,26 +52,43 @@ typedef struct ast {
 	{                                                                      \
 		.type = A_ID, .id = {.name = (N), .type = I_OP }               \
 	}
+
 #define kw(N)                                                                  \
 	(ast)                                                                  \
 	{                                                                      \
 		.type = A_ID, .id = {.name = (N), .type = I_KW }               \
 	}
+
 #define word(N)                                                                \
 	(ast)                                                                  \
 	{                                                                      \
 		.type = A_ID, .id = {.name = (N), .type = I_WORD }             \
 	}
+
 #define block(ITEMS)                                                           \
 	(ast)                                                                  \
 	{                                                                      \
 		.type = A_BLOCK, .block = {.items = (ITEMS) }                  \
 	}
+
 #define def(N, T)                                                              \
 	(ast)                                                                  \
 	{                                                                      \
 		.type = A_DEF, .def = {.name = (N), .type = (T) }              \
 	}
+
+#define list(ITEMS)                                                            \
+	(ast)                                                                  \
+	{                                                                      \
+		.type = A_LIST, .list = {.items = (ITEMS) }                    \
+	}
+
+#define call(ARGS)                                                             \
+	(ast)                                                                  \
+	{                                                                      \
+		.type = A_CALL, .call = {.args = (ARGS) }                      \
+	}
+
 #define oper(N, L, R)                                                          \
 	(ast)                                                                  \
 	{                                                                      \
@@ -79,16 +100,14 @@ typedef struct ast {
 	}
 
 ast dot(ast l, ast r);
-ast list(tb_stack_ref_t children);
 ast list0();
 ast list1(ast a);
 ast append(ast l, ast a);
 void printl_ast(ast *t);
-void push(tb_stack_ref_t stack, ast a);
 
-#define W(x) word(x)
-#define L(x) call(x)
-#define K(x) kw(x)
-#define O(x) op(x)
+#define W(x) &word(x)
+#define L(x) &list(x)
+#define K(x) &kw(x)
+#define O(x) &op(x)
 
 #endif // COMMON_H_

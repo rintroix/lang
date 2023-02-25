@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define TB_TRACE_MODULE_NAME "main"
 #include "tbox/tbox.h"
 
 #include "common.h"
@@ -30,6 +29,15 @@ tb_element_t ast_ref_element;
 		exit(1);                                                       \
 	} while (0)
 
+tb_iterator_ref_t slice(tb_iterator_ref_t iter, tb_size_t start, tb_size_t end) {
+	tb_assert(end >= start);
+	tb_vector_ref_t out = tb_vector_init(end - start, ast_element);
+	tb_for(ast*, item, start, end, iter) {
+		tb_vector_insert_tail(out, item);
+	}
+	return out;
+}
+
 int is(ast *a, ast *pat)
 {
 	if (!pat)
@@ -48,14 +56,26 @@ int is(ast *a, ast *pat)
 			return 0;
 		break;
 
+	case A_LIST:
+		if (!pat->list.items)
+			return 1;
+		todo;
+		break;
+
+	case A_CALL:
+		todo;
+		break;
+
 	default:
 		bug("%s: unhandled %d", __func__, pat->type);
 	}
 }
 
-tb_bool_t it_is(tb_iterator_ref_t iterator, tb_cpointer_t item, tb_cpointer_t data) {
+tb_bool_t it_is(tb_iterator_ref_t iterator, tb_cpointer_t item,
+		tb_cpointer_t data)
+{
 	(void)iterator;
-	return is((ast*)item, (ast*)data);
+	return is((ast *)item, (ast *)data);
 }
 
 int has(tb_iterator_ref_t list, ast *pattern)
@@ -67,19 +87,31 @@ int has(tb_iterator_ref_t list, ast *pattern)
 void print_ast(ast *a)
 {
 	switch (a->type) {
-	case A_CALL:
+	case A_LIST: {
+		printf("(");
+		int i = 0;
+		tb_for_all(ast *, item, a->list.items)
+		{
+			if (i != 0)
+				printf(" ");
+			print_ast(item);
+			i++;
+		}
+		printf(")");
+	} break;
+
+	case A_CALL: {
 		printf("(");
 		int i = 0;
 		tb_for_all(ast *, item, a->call.args)
 		{
-			if (i == 0)
-				i = 1;
-			else
+			if (i != 0)
 				printf(" ");
 			print_ast(item);
+			i++;
 		}
 		printf(")");
-		break;
+	} break;
 
 	case A_ID:
 		if (a->id.type == I_KW)
@@ -124,48 +156,25 @@ tb_bool_t ismark(tb_iterator_ref_t iterator, tb_cpointer_t item,
 	return ((ast *)item)->type == A_MARK;
 }
 
-ast call(tb_stack_ref_t args)
-{
-	return (ast){.type = A_CALL, .call = {.args = args}};
-}
-
-ast list(tb_stack_ref_t stack)
-{
-	tb_stack_ref_t args =
-	    tb_stack_init(tb_iterator_size(stack), ast_element);
-	size_t mark = tb_rfind_if(stack, 0, tb_iterator_size(stack), ismark, 0);
-	tb_for(ast *, item, mark + 1, tb_iterator_size(stack), stack)
-	{
-		tb_stack_put(args, item);
-	}
-	while (((ast *)tb_stack_last(stack))->type != A_MARK) {
-		tb_stack_pop(stack);
-	}
-	tb_stack_pop(stack); // mark
-	return call(args);
-}
-
 ast list0()
 {
-	tb_stack_ref_t args = tb_stack_init(0, ast_element);
-	return call(args);
+	tb_vector_ref_t items = tb_vector_init(10, ast_element);
+	return list(items);
 }
 
 ast list1(ast a)
 {
-	tb_stack_ref_t args = tb_stack_init(1, ast_element);
-	tb_stack_put(args, &a);
-	return call(args);
+	tb_vector_ref_t items = tb_vector_init(10, ast_element);
+	tb_vector_insert_tail(items, &a);
+	return list(items);
 }
 
 ast append(ast l, ast a)
 {
-	tb_check_abort(l.type == A_CALL);
-	tb_stack_put(l.call.args, &a);
+	tb_check_abort(l.type == A_LIST);
+	tb_vector_insert_tail(l.list.items, &a);
 	return l;
 }
-
-void push(tb_stack_ref_t stack, ast a) { tb_stack_put(stack, &a); }
 
 void destroy_ast(ast *a)
 {
@@ -177,13 +186,19 @@ void destroy_ast(ast *a)
 		// if (a->fn.args) // TODO
 		break;
 
-	case A_CALL:
+	case A_LIST: {
+		tb_for_all(ast *, item, a->call.args) { destroy_ast(item); }
+		tb_stack_clear(a->call.args);
+		tb_stack_exit(a->call.args);
+	} break;
+
+	case A_CALL: {
 		if (a->call.name)
 			tb_free(a->call.name); // TODO hack, need empty list ast
 		tb_for_all(ast *, item, a->call.args) { destroy_ast(item); }
 		tb_stack_clear(a->call.args);
 		tb_stack_exit(a->call.args);
-		break;
+	} break;
 
 	case A_ID:
 		tb_free(a->id.name);
@@ -214,19 +229,23 @@ void destroy_ast(ast *a)
 void compile(tb_list_ref_t context, ast *a)
 {
 	switch (a->type) {
-	case A_FN:
+	case A_FN: {
 		printf("%s %s(", a->fn.type, a->fn.name);
 		printf(") {\n");
-		tb_for_all(ast *, b, a->fn.body->block.items)
+		tb_for_all(ast *, item, a->fn.body->block.items)
 		{
-			compile(context, b);
+			compile(context, item);
 			puts(";");
 		}
 		printf("}");
 		puts("");
-		break;
+	} break;
 
-	case A_CALL:
+	case A_LIST: {
+		bug("%s: bare list", __func__);
+	} break;
+
+	case A_CALL: {
 		printf("%s(", a->call.name);
 		tb_for_all(ast *, arg, a->call.args)
 		{
@@ -236,14 +255,14 @@ void compile(tb_list_ref_t context, ast *a)
 		}
 		printf(")");
 		todo;
-		break;
+	} break;
 
 	case A_DEF:
 		todo;
 		break;
 
 	case A_ID:
-		bug("%s: id", __func__);
+		bug("%s: id %s", __func__, a->id.name);
 		break;
 
 	case A_OPER:
@@ -293,48 +312,59 @@ tb_iterator_ref_t funargs(tb_iterator_ref_t list)
 	return out;
 }
 
-ast *operate(tb_iterator_ref_t macros, tb_iterator_ref_t list) {
-	tb_vector_ref_t left = tb_vector_init(10, ast_element);
-	tb_size_t pos = tb_find_all_if(list, it_is, &O(0)); 
-	tb_trace_i("POS %d TAIL %d", pos, tb_iterator_tail(list));
- 	return 0;
+ast _operate(tb_iterator_ref_t macros, tb_iterator_ref_t list, tb_size_t start)
+{
+	tb_size_t pos = tb_find_if(list, start, tb_iterator_tail(list), it_is, O(0));
+
+	if (pos == start) {
+		bug("%s: operator without left side", __func__);
+	}
+
+	if (pos == tb_iterator_tail(list)) {
+		bug("%s: no operator", __func__);
+		// TODO next return whole slice
+	}
+
+	tb_assert(pos > start);
+
+	tb_vector_ref_t left = slice(list, start, pos - 1);
+
+	ast *op = tb_iterator_item(list, pos);
+	tb_trace_d("TTT %s %d %d", op->id.name, op->type, op->id.type);
+	tb_assert(op->type == A_ID && op->id.type == I_OP);
+
+	// TODO macros
+
+	return oper(op->id.name, list(left), _operate(macros, list, pos + 1));
 }
 
-int _match(tb_list_ref_t list, ast *pat)
+ast operate(tb_iterator_ref_t macros, tb_iterator_ref_t list)
+{
+	return _operate(macros, list, 0);
+}
+
+int _match(tb_vector_ref_t list, ast **patterns)
 {
 	tb_for_all(ast *, a, list)
 	{
+		ast *pat = *patterns;
+
 		if (pat->type == A_MARK)
 			return 1;
 
-		// TODO atom if pat 0
+		// TODO atom pat == 0
 
-		if (a->type != pat->type) {
+		if (!is(a, pat))
 			return 0;
-		}
 
-		switch (pat->type) {
-		case A_CALL:
-			break;
-		case A_ID:
-			if (pat->id.name && pat->id.type == a->id.type &&
-			    0 != strcmp(pat->id.name, a->id.name)) {
-				return 0;
-			}
-			break;
-		default:
-			bug("match unhandled for %d", pat->type);
-			break;
-		}
-
-		pat++;
+		patterns++;
 	}
 
 	return 0;
 }
 
 #define match(list, ...)                                                       \
-	_match(list, (ast[]){__VA_ARGS__, (ast){.type = A_MARK}})
+	_match(list, (ast *[]){__VA_ARGS__, &(ast){.type = A_MARK}})
 
 #define get(x, y) ((ast *)tb_iterator_item(x, y))
 
@@ -342,16 +372,18 @@ ast *transform(tb_iterator_ref_t macros, ast *a)
 {
 	// TODO compactor first
 
-	if (a->type == A_CALL) {
-		tb_iterator_ref_t list = a->call.args;
+	if (a->type == A_LIST) {
+		tb_iterator_ref_t items = a->list.items;
 		tb_vector_ref_t bodies = tb_vector_init(10, ast_element);
-		if (match(list, W("fn"), W(0), K(0), L(0))) {
+		tb_trace_d("LIST SIZE %d", tb_iterator_size(items));
+		printl_ast(a);
+		if (match(items, W("fn"), W(0), K(0), L(0))) {
 			puts("MATCHED");
-			char *name = get(list, 1)->id.name;
-			char *type = get(list, 2)->id.name;
+			char *name = get(items, 1)->id.name;
+			char *type = get(items, 2)->id.name;
 			tb_iterator_ref_t args =
-			    funargs(get(list, 3)->call.args);
-			tb_for(ast *, b, 4, tb_iterator_tail(list), list)
+			    funargs(get(items, 3)->list.items);
+			tb_for(ast *, b, 4, tb_iterator_tail(items), items)
 			{
 				ast *bt = transform(macros, b);
 				tb_vector_insert_tail(bodies, bt);
@@ -368,8 +400,8 @@ ast *transform(tb_iterator_ref_t macros, ast *a)
 				    .body = body,
 				},
 			});
-		} else if (has(list, &O(0))) {
-			return operate(macros, list);
+		} else if (has(items, O(0))) {
+			return lift(operate(macros, items));
 		}
 	}
 
