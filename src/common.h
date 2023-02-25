@@ -43,10 +43,41 @@ typedef struct ast {
 	};
 } ast;
 
-ast word(char *name);
-ast kw(char *name);
-ast op(char *name);
-ast oper(char *name, ast l, ast r);
+#define op(N)                                                                  \
+	(ast)                                                                  \
+	{                                                                      \
+		.type = A_ID, .id = {.name = (N), .type = I_OP }               \
+	}
+#define kw(N)                                                                  \
+	(ast)                                                                  \
+	{                                                                      \
+		.type = A_ID, .id = {.name = (N), .type = I_KW }               \
+	}
+#define word(N)                                                                \
+	(ast)                                                                  \
+	{                                                                      \
+		.type = A_ID, .id = {.name = (N), .type = I_WORD }             \
+	}
+#define block(ITEMS)                                                           \
+	(ast)                                                                  \
+	{                                                                      \
+		.type = A_BLOCK, .block = {.items = (ITEMS) }                  \
+	}
+#define def(N, T)                                                              \
+	(ast)                                                                  \
+	{                                                                      \
+		.type = A_DEF, .def = {.name = (N), .type = (T) }              \
+	}
+#define oper(N, L, R)                                                          \
+	(ast)                                                                  \
+	{                                                                      \
+		.type = A_OPER, .oper = {                                      \
+			.name = (N),                                           \
+			.left = lift(L),                                       \
+			.right = lift(R)                                       \
+		}                                                              \
+	}
+
 ast dot(ast l, ast r);
 ast list(tb_stack_ref_t children);
 ast list0();
@@ -54,5 +85,10 @@ ast list1(ast a);
 ast append(ast l, ast a);
 void printl_ast(ast *t);
 void push(tb_stack_ref_t stack, ast a);
+
+#define W(x) word(x)
+#define L(x) call(x)
+#define K(x) kw(x)
+#define O(x) op(x)
 
 #endif // COMMON_H_

@@ -15,7 +15,7 @@ tb_element_t ast_ref_element;
 #define todo                                                                   \
 	do {                                                                   \
 		tb_trace_noimpl();                                             \
-		tb_abort();                                                    \
+		exit(3);                                                       \
 	} while (0)
 
 #define bug(...)                                                               \
@@ -29,6 +29,40 @@ tb_element_t ast_ref_element;
 		tb_trace_e(__VA_ARGS__);                                       \
 		exit(1);                                                       \
 	} while (0)
+
+int is(ast *a, ast *pat)
+{
+	if (!pat)
+		return 1;
+
+	switch (pat->type) {
+	case A_ID:
+		if (pat->id.type != a->id.type)
+			return 0;
+
+		if (!pat->id.name)
+			return 1;
+		else if (0 == strcmp(pat->id.name, a->id.name))
+			return 1;
+		else
+			return 0;
+		break;
+
+	default:
+		bug("%s: unhandled %d", __func__, pat->type);
+	}
+}
+
+tb_bool_t it_is(tb_iterator_ref_t iterator, tb_cpointer_t item, tb_cpointer_t data) {
+	(void)iterator;
+	return is((ast*)item, (ast*)data);
+}
+
+int has(tb_iterator_ref_t list, ast *pattern)
+{
+	tb_size_t pos = tb_find_all_if(list, it_is, pattern);
+	return pos != tb_iterator_tail(list);
+}
 
 void print_ast(ast *a)
 {
@@ -80,37 +114,6 @@ ast *lift(ast a)
 	ast *ptr = malloc(sizeof(ast));
 	*ptr = a;
 	return ptr;
-}
-
-ast kw(char *name)
-{
-	return (ast){.type = A_ID, .id = {.name = name, .type = I_KW}};
-}
-
-ast word(char *name)
-{
-	return (ast){.type = A_ID, .id = {.name = name, .type = I_WORD}};
-}
-
-ast op(char *name)
-{
-	return (ast){.type = A_ID, .id = {.name = name, .type = I_OP}};
-}
-
-ast block(tb_iterator_ref_t items)
-{
-	return (ast){.type = A_BLOCK, .block = {.items = items}};
-}
-
-ast def(char *name, char *type)
-{
-	return (ast){.type = A_DEF, .def = {.name = name, .type = type}};
-}
-
-ast oper(char *name, ast l, ast r)
-{
-	return (ast){.type = A_OPER,
-		     .oper = {.name = name, .left = lift(l), .right = lift(r)}};
 }
 
 tb_bool_t ismark(tb_iterator_ref_t iterator, tb_cpointer_t item,
@@ -201,6 +204,10 @@ void destroy_ast(ast *a)
 	case A_MARK:
 		bug("mark");
 		break;
+
+	case A_BLOCK:
+		todo;
+		break;
 	}
 }
 
@@ -243,6 +250,10 @@ void compile(tb_list_ref_t context, ast *a)
 		todo;
 		break;
 
+	case A_BLOCK:
+		todo;
+		break;
+
 	case A_MARK:
 		bug("%s: mark", __func__);
 		break;
@@ -282,36 +293,11 @@ tb_iterator_ref_t funargs(tb_iterator_ref_t list)
 	return out;
 }
 
-int has(tb_iterator_ref_t list, ast a)
-{
-	tb_for_all(ast *, item, list)
-	{
-		if (item->type != a.type)
-			continue;
-
-		switch (a.type) {
-		case A_ID:
-			if (a.id.type != item->id.type)
-				continue;
-
-			if (!a.id.name)
-				return 1;
-			else if (0 == strcmp(a.id.name, item->id.name))
-				return 1;
-			else
-				return 0;
-			break;
-
-		default:
-			bug("%s: unhandled %d", __func__, a.type);
-		}
-	}
-
-	return 0;
-}
-
-ast *operate(tb_iterator_ref_t list) {
-	return 0;
+ast *operate(tb_iterator_ref_t macros, tb_iterator_ref_t list) {
+	tb_vector_ref_t left = tb_vector_init(10, ast_element);
+	tb_size_t pos = tb_find_all_if(list, it_is, &O(0)); 
+	tb_trace_i("POS %d TAIL %d", pos, tb_iterator_tail(list));
+ 	return 0;
 }
 
 int _match(tb_list_ref_t list, ast *pat)
@@ -319,7 +305,9 @@ int _match(tb_list_ref_t list, ast *pat)
 	tb_for_all(ast *, a, list)
 	{
 		if (pat->type == A_MARK)
-			break;
+			return 1;
+
+		// TODO atom if pat 0
 
 		if (a->type != pat->type) {
 			return 0;
@@ -342,7 +330,7 @@ int _match(tb_list_ref_t list, ast *pat)
 		pat++;
 	}
 
-	return 1;
+	return 0;
 }
 
 #define match(list, ...)                                                       \
@@ -350,12 +338,7 @@ int _match(tb_list_ref_t list, ast *pat)
 
 #define get(x, y) ((ast *)tb_iterator_item(x, y))
 
-#define W(x) word(x)
-#define L(x) call(x)
-#define K(x) kw(x)
-#define O(x) op(x)
-
-ast *transform(tb_list_ref_t macros, ast *a)
+ast *transform(tb_iterator_ref_t macros, ast *a)
 {
 	// TODO compactor first
 
@@ -385,8 +368,8 @@ ast *transform(tb_list_ref_t macros, ast *a)
 				    .body = body,
 				},
 			});
-		} else if (has(list, O(0))) {
-			// return operate(list);
+		} else if (has(list, &O(0))) {
+			return operate(macros, list);
 		}
 	}
 
