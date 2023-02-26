@@ -1,4 +1,3 @@
-%auxil "tb_stack_ref_t"
 %value "struct ast"
 
 %source {
@@ -10,7 +9,7 @@
 #include "common.h"
 }
 
-top <- _* l:list _* { $$ = l; } / _* !.
+top <- _* l:list { $$ = l; } / _* !.
 
 list <- '(' _*            ')' { $$ = list0(); }
       / '(' _* a:atom  _* ')' { $$ = list1(a); }

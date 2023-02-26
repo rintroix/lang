@@ -14,7 +14,7 @@ release: build/release/app
 
 build/%/app: APPFLAGS += -lm -Ibuild/$* -Isrc -I$(tbox)/src
 build/%/app: src/main.c build/%/parser.c build/%/libtbox.a | build/%/
-	@echo cc '' $@
+	@echo + $@
 	@$(CC) $(CFLAGS) $(APPFLAGS) $^ -o $@
 
 build/%/libtbox.a: $(tbox)/build/$(os)/$(arch)/%/libtbox.a | build/%/
@@ -25,11 +25,11 @@ $(tbox)/build/$(os)/$(arch)/%/libtbox.a:
 	cd $(tbox) && ./configure --mode=$* --demo=no && make
 
 build/%/parser.c: src/parser.peg | build/packcc build/%/
-	@echo peg $<
+	@echo + $<
 	@cd build/$*/ && ../packcc -o parser ../../$^
  
 build/packcc: external/packcc/src/packcc.c | build/
-	@echo cc '' $@
+	@echo + $@
 	@$(CC) $(CFLAGS) $^ -o $@
 
 %/:
@@ -38,5 +38,8 @@ build/packcc: external/packcc/src/packcc.c | build/
 clean:
 	@rm -rf build/
 
-.PHONY: clean debug release
+tools: clean
+	@bear -- make
+
+.PHONY: clean debug release tools
 .PRECIOUS: %/ build/%/libtbox.a build/%/parser.c   

@@ -3,8 +3,23 @@
 
 #include "tbox/tbox.h"
 
-enum ast_type { A_FN, A_LIST, A_CALL, A_ID, A_DEF, A_OPER, A_BLOCK, A_MARK };
+enum ast_type {
+	A_FN = 1,
+	A_LIST,
+	A_CALL,
+	A_ID,
+	A_REF,
+	A_DEF,
+	A_OPER,
+	A_BLOCK,
+	A_MARK
+};
+
 enum id_type { I_WORD, I_KW, I_OP };
+
+typedef struct block {
+	tb_iterator_ref_t items;
+} block;
 
 typedef struct ast {
 	enum ast_type type;
@@ -13,7 +28,7 @@ typedef struct ast {
 			char *name;
 			char *type;
 			tb_iterator_ref_t args;
-			struct ast *body;
+			block *body;
 		} fn;
 
 		struct {
@@ -32,6 +47,10 @@ typedef struct ast {
 
 		struct {
 			char *name;
+		} ref;
+
+		struct {
+			char *name;
 			enum id_type type;
 		} id;
 
@@ -41,40 +60,38 @@ typedef struct ast {
 			struct ast *right;
 		} oper;
 
-		struct {
-			tb_iterator_ref_t items;
-		} block;
+		block block;
 	};
 } ast;
 
-#define op(N)                                                                  \
+#define op(NAME)                                                               \
 	(ast)                                                                  \
 	{                                                                      \
-		.type = A_ID, .id = {.name = (N), .type = I_OP }               \
+		.type = A_ID, .id = {.name = (NAME), .type = I_OP }            \
 	}
 
-#define kw(N)                                                                  \
+#define kw(NAME)                                                               \
 	(ast)                                                                  \
 	{                                                                      \
-		.type = A_ID, .id = {.name = (N), .type = I_KW }               \
+		.type = A_ID, .id = {.name = (NAME), .type = I_KW }            \
 	}
 
-#define word(N)                                                                \
+#define word(NAME)                                                             \
 	(ast)                                                                  \
 	{                                                                      \
-		.type = A_ID, .id = {.name = (N), .type = I_WORD }             \
+		.type = A_ID, .id = {.name = (NAME), .type = I_WORD }          \
 	}
 
-#define block(ITEMS)                                                           \
+#define ablock(BLOCK)                                                          \
 	(ast)                                                                  \
 	{                                                                      \
-		.type = A_BLOCK, .block = {.items = (ITEMS) }                  \
+		.type = A_BLOCK, .block = (BLOCK)                              \
 	}
 
-#define def(N, T)                                                              \
+#define def(NAME, T)                                                           \
 	(ast)                                                                  \
 	{                                                                      \
-		.type = A_DEF, .def = {.name = (N), .type = (T) }              \
+		.type = A_DEF, .def = {.name = (NAME), .type = (T) }           \
 	}
 
 #define list(ITEMS)                                                            \
@@ -83,20 +100,30 @@ typedef struct ast {
 		.type = A_LIST, .list = {.items = (ITEMS) }                    \
 	}
 
-#define call(ARGS)                                                             \
+#define call(NAME, ARGS)                                                       \
 	(ast)                                                                  \
 	{                                                                      \
-		.type = A_CALL, .call = {.args = (ARGS) }                      \
+		.type = A_CALL, .call = {.name = (NAME), .args = (ARGS) }      \
 	}
 
-#define oper(N, L, R)                                                          \
+#define oper(NAME, L, R)                                                       \
 	(ast)                                                                  \
 	{                                                                      \
 		.type = A_OPER, .oper = {                                      \
-			.name = (N),                                           \
+			.name = (NAME),                                        \
 			.left = (L),                                           \
 			.right = (R)                                           \
 		}                                                              \
+	}
+
+#define fn(NAME, TYPE, ARGS, BODY)                                             \
+	(ast)                                                                  \
+	{                                                                      \
+		.type = A_FN,                                                  \
+		.fn = {.name = (NAME),                                         \
+		       .type = (TYPE),                                         \
+		       .args = (ARGS),                                         \
+		       .body = (BODY) }                                        \
 	}
 
 ast dot(ast l, ast r);
@@ -109,5 +136,36 @@ void printl_ast(ast *t);
 #define L(x) &list(x)
 #define K(x) &kw(x)
 #define O(x) &op(x)
+#define F(x) &fn(x, 0, 0, 0)
+
+typedef struct macro {
+	char *name;
+} macro;
+
+typedef struct scope {
+	tb_iterator_ref_t functions;
+	struct scope *next;
+} scope;
+
+typedef struct request {
+	tb_iterator_ref_t args;
+	tb_iterator_ref_t rules;
+	tb_iterator_ref_t candidates;
+} request;
+
+enum e_rule {
+	R_EMPTY = 1,
+	R_IS,
+	R_CALL,
+};
+
+typedef struct rule {
+	enum e_rule type;
+	union {
+		struct {
+			char *name;
+		} is;
+	};
+} rule;
 
 #endif // COMMON_H_
