@@ -3,6 +3,12 @@
 
 #include "tbox/tbox.h"
 
+typedef struct define {
+	char *name;
+	char *type;
+	struct ast *init;
+} define;
+
 enum ast_type {
 	A_FN = 1,
 	A_LIST,
@@ -18,6 +24,7 @@ enum ast_type {
 enum id_type { I_WORD, I_KW, I_OP };
 
 typedef struct block {
+	tb_iterator_ref_t defs;
 	tb_iterator_ref_t items;
 } block;
 
@@ -25,10 +32,8 @@ typedef struct ast {
 	enum ast_type type;
 	union {
 		struct {
-			char *name;
-			char *type;
+			define def;
 			tb_iterator_ref_t args;
-			block *body;
 		} fn;
 
 		struct {
@@ -40,10 +45,7 @@ typedef struct ast {
 			tb_iterator_ref_t args;
 		} call;
 
-		struct {
-			char *name;
-			char *type;
-		} def;
+		define def;
 
 		struct {
 			char *name;
@@ -116,14 +118,10 @@ typedef struct ast {
 		}                                                              \
 	}
 
-#define fn(NAME, TYPE, ARGS, BODY)                                             \
+#define fn(DEF, ARGS)                                                          \
 	(ast)                                                                  \
 	{                                                                      \
-		.type = A_FN,                                                  \
-		.fn = {.name = (NAME),                                         \
-		       .type = (TYPE),                                         \
-		       .args = (ARGS),                                         \
-		       .body = (BODY) }                                        \
+		.type = A_FN, .fn = {.def = (DEF), .args = (ARGS) }            \
 	}
 
 ast dot(ast l, ast r);
@@ -136,7 +134,7 @@ void printl_ast(ast *t);
 #define L(x) &list(x)
 #define K(x) &kw(x)
 #define O(x) &op(x)
-#define F(x) &fn(x, 0, 0, 0)
+#define F(x) &fn((define){.name=(x)}, 0)
 
 typedef struct macro {
 	char *name;

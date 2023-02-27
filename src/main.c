@@ -86,13 +86,14 @@ int is(ast *a, ast *pat)
 		break;
 
 	case A_FN:
-		if (!pat->fn.name)
+		if (!pat->fn.def.name)
 			return 1;
 
-		if (0 != strcmp(pat->fn.name, a->fn.name))
+		if (0 != strcmp(pat->fn.def.name, a->fn.def.name))
 			return 0;
 
-		if (pat->fn.args || pat->fn.body || pat->fn.type)
+		if (pat->fn.args || pat->fn.def.init || pat->fn.def.type ||
+		    pat->fn.args)
 			bug("%s: extra fun", __func__);
 
 		return 1;
@@ -132,7 +133,7 @@ void print_ast(ast *a)
 	} break;
 
 	case A_FN: {
-		printf("FN %s", a->fn.name);
+		printf("FN %s", a->fn.def.name);
 	} break;
 
 	case A_CALL: {
@@ -208,9 +209,9 @@ void destroy_ast(ast *a)
 {
 	switch (a->type) {
 	case A_FN:
-		tb_free(a->fn.name);
-		if (a->fn.type)
-			tb_free(a->fn.type);
+		tb_free(a->fn.def.name);
+		if (a->fn.def.type)
+			tb_free(a->fn.def.type);
 		// if (a->fn.args) // TODO
 		break;
 
@@ -419,11 +420,9 @@ int _match(tb_vector_ref_t list, ast **patterns, size_t n)
 #define MA(...) ((ast *[]){__VA_ARGS__})
 #define match(L, ...) _match(L, MA(__VA_ARGS__), LEN(MA(__VA_ARGS__)))
 
-block *transform_block(tb_iterator_ref_t macros, tb_iterator_ref_t iter,
-		       tb_size_t start, tb_size_t end)
+block transform_block(tb_iterator_ref_t macros, tb_iterator_ref_t iter,
+		      tb_size_t start, tb_size_t end)
 {
-	block *out = tb_malloc(sizeof(block));
-
 	tb_check_abort(end >= start);
 	tb_vector_ref_t items = tb_vector_init(end - start, ast_element);
 	tb_for(ast *, a, start, end, iter)
@@ -432,8 +431,8 @@ block *transform_block(tb_iterator_ref_t macros, tb_iterator_ref_t iter,
 		tb_vector_insert_tail(items, b);
 	}
 
-	*out = (block){.items = items};
-	return out;
+	// TODO block needs defs?
+	return (block){.items = items};
 }
 
 ast *transform(tb_iterator_ref_t macros, ast *a)
@@ -449,9 +448,11 @@ ast *transform(tb_iterator_ref_t macros, ast *a)
 		char *name = get(items, 1)->id.name;
 		char *type = get(items, 2)->id.name;
 		tb_iterator_ref_t args = funargs(get(items, 3)->list.items);
-		block *body =
-		    transform_block(macros, items, 4, tb_iterator_tail(items));
-		return lift(fn(name, type, args, body));
+		ast *init = lift(ablock(transform_block(
+		    macros, items, 4, tb_iterator_tail(items))));
+		return lift(
+		    fn(((define){.name = name, .type = type, .init = init}),
+		       args));
 	} else if (has(items, O(0))) {
 		return operate(macros, items, 0);
 	}
@@ -504,7 +505,7 @@ tb_iterator_ref_t find_candidates(scope *scope, char *name,
 		if (a->type != A_FN)
 			bug("%s: not fun", __func__);
 
-		if (0 != strcmp(name, a->fn.name))
+		if (0 != strcmp(name, a->fn.def.name))
 			continue;
 
 		// todo next
