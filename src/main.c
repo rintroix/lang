@@ -14,6 +14,7 @@
 tb_element_t ast_element;
 tb_element_t rule_element;
 tb_element_t macro_element;
+tb_element_t define_element;
 
 ast *transform(tb_iterator_ref_t macros, ast *a);
 
@@ -215,9 +216,6 @@ void destroy_ast(ast *a)
 		// if (a->fn.args) // TODO
 		break;
 
-	case A_REF:
-		break;
-
 	case A_LIST: {
 		tb_for_all(ast *, item, a->call.args) { destroy_ast(item); }
 		tb_stack_clear(a->call.args);
@@ -234,10 +232,6 @@ void destroy_ast(ast *a)
 
 	case A_ID:
 		tb_free(a->id.name);
-		break;
-
-	case A_DEF:
-		tb_free(a->def.name);
 		break;
 
 	case A_OPER:
@@ -329,25 +323,24 @@ void destroy_ast(ast *a)
 tb_iterator_ref_t funargs(tb_iterator_ref_t list)
 {
 	tb_vector_ref_t out =
-	    tb_vector_init(tb_iterator_size(list), ast_element);
+	    tb_vector_init(tb_iterator_size(list), define_element);
 
-	ast *last = 0;
+	define *last = 0;
 	tb_for_all(ast *, arg, list)
 	{
 		if (arg->type != A_ID)
 			error("fun arg not an identifier");
 
 		switch (arg->id.type) {
-		case I_WORD:;
-			ast *d = lift(def(arg->id.name, 0));
-			last = d;
-			tb_vector_insert_tail(out, d);
-			break;
+		case I_WORD: {
+			tb_vector_insert_tail(out, &def(arg->id.name, 0, 0));
+			last = tb_vector_last(out);
+		} break;
 
 		case I_KW:
-			if (last->def.type)
+			if (last->type)
 				error("several keywords after fun arg");
-			last->def.type = arg->id.name;
+			last->type = arg->id.name;
 			break;
 
 		default:
@@ -450,9 +443,7 @@ ast *transform(tb_iterator_ref_t macros, ast *a)
 		tb_iterator_ref_t args = funargs(get(items, 3)->list.items);
 		ast *init = lift(ablock(transform_block(
 		    macros, items, 4, tb_iterator_tail(items))));
-		return lift(
-		    fn(((define){.name = name, .type = type, .init = init}),
-		       args));
+		return lift(fn(def(name, type, init), args));
 	} else if (has(items, O(0))) {
 		return operate(macros, items, 0);
 	}
@@ -557,6 +548,7 @@ int main()
 	ast_element = tb_element_mem(sizeof(ast), 0, 0);
 	rule_element = tb_element_mem(sizeof(rule), 0, 0);
 	macro_element = tb_element_mem(sizeof(macro), 0, 0);
+	define_element = tb_element_mem(sizeof(define), 0, 0);
 
 	tb_vector_ref_t topast = tb_vector_init(128, ast_element);
 	tb_vector_ref_t macros = tb_vector_init(128, ast_element);

@@ -14,8 +14,6 @@ enum ast_type {
 	A_LIST,
 	A_CALL,
 	A_ID,
-	A_REF,
-	A_DEF,
 	A_OPER,
 	A_BLOCK,
 	A_MARK
@@ -44,12 +42,6 @@ typedef struct ast {
 			char *name;
 			tb_iterator_ref_t args;
 		} call;
-
-		define def;
-
-		struct {
-			char *name;
-		} ref;
 
 		struct {
 			char *name;
@@ -90,12 +82,6 @@ typedef struct ast {
 		.type = A_BLOCK, .block = (BLOCK)                              \
 	}
 
-#define def(NAME, T)                                                           \
-	(ast)                                                                  \
-	{                                                                      \
-		.type = A_DEF, .def = {.name = (NAME), .type = (T) }           \
-	}
-
 #define list(ITEMS)                                                            \
 	(ast)                                                                  \
 	{                                                                      \
@@ -124,6 +110,12 @@ typedef struct ast {
 		.type = A_FN, .fn = {.def = (DEF), .args = (ARGS) }            \
 	}
 
+#define def(NAME, TYPE, INIT)                                                  \
+	(define)                                                               \
+	{                                                                      \
+		.name = NAME, .type = (TYPE), .init = (INIT)                   \
+	}
+
 ast dot(ast l, ast r);
 ast list0();
 ast list1(ast a);
@@ -134,7 +126,7 @@ void printl_ast(ast *t);
 #define L(x) &list(x)
 #define K(x) &kw(x)
 #define O(x) &op(x)
-#define F(x) &fn((define){.name=(x)}, 0)
+#define F(x) &fn(def(x, 0, 0))
 
 typedef struct macro {
 	char *name;
