@@ -3,6 +3,8 @@
 
 #include "tbox/tbox.h"
 
+#define log(...) tb_trace_i(__VA_ARGS__)
+
 typedef struct define {
 	char *name;
 	char *type;
@@ -138,6 +140,7 @@ typedef struct scope {
 } scope;
 
 typedef struct request {
+	struct scope *scope;
 	tb_iterator_ref_t args;
 	tb_iterator_ref_t rules;
 	tb_iterator_ref_t candidates;

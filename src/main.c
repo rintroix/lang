@@ -15,6 +15,7 @@ tb_element_t ast_element;
 tb_element_t rule_element;
 tb_element_t macro_element;
 tb_element_t define_element;
+tb_element_t request_element;
 
 ast *transform(tb_iterator_ref_t macros, ast *a);
 
@@ -437,7 +438,6 @@ ast *transform(tb_iterator_ref_t macros, ast *a)
 
 	tb_iterator_ref_t items = a->list.items;
 	if (match(items, W("fn"), W(0), K(0), L(0))) {
-		puts("MATCHED");
 		char *name = get(items, 1)->id.name;
 		char *type = get(items, 2)->id.name;
 		tb_iterator_ref_t args = funargs(get(items, 3)->list.items);
@@ -449,23 +449,6 @@ ast *transform(tb_iterator_ref_t macros, ast *a)
 	}
 
 	return a;
-}
-
-void manage_ast(ast *a)
-{
-	printl_ast(a);
-	tb_vector_ref_t macros = tb_vector_init(10, tb_element_ptr(0, 0));
-	ast *b = transform(macros, a);
-	printl_ast(b);
- 	// tb_list_ref_t rules = tb_vector_init(0, rule_element);
-
-
-	
-	// infer(context, b);
-	// compile(context, b);
-	// tb_list_clear(context);
-	// tb_list_exit(context);
-	// destroy_ast(b);
 }
 
 scope *newscope(tb_iterator_ref_t asts, scope *next)
@@ -488,9 +471,43 @@ scope *newscope(tb_iterator_ref_t asts, scope *next)
 	return out;
 }
 
+int satisfies(rule *r, define *d) {
+	switch(r->type) {
+	case R_EMPTY:
+		return 1;
+		break;
+
+	case R_IS:
+		if (! d->type)
+			return 1;
+		if (! r->type)
+			bug("%s: is no type", __func__);
+		return 0 == strcmp(r->is.name, d->type);		
+		break;
+
+	case R_CALL:
+		todo;
+		break;
+	}
+}
+
+int compatible(tb_iterator_ref_t args, tb_iterator_ref_t rules) {
+	if (tb_iterator_size(args) != tb_iterator_size(rules))
+		return 0;
+
+	tb_for_all(define*, arg, args) {
+		if (!satisfies(tb_iterator_item(rules, arg_itor), arg))
+			return 0;
+	}
+
+	return 1;
+}
+
 tb_iterator_ref_t find_candidates(scope *scope, char *name,
-				  tb_iterator_ref_t args)
+				  tb_iterator_ref_t arg_rules)
 {
+	tb_iterator_ref_t candidates = 0;
+	
 	tb_for_all(ast *, a, scope->functions)
 	{
 		if (a->type != A_FN)
@@ -499,11 +516,15 @@ tb_iterator_ref_t find_candidates(scope *scope, char *name,
 		if (0 != strcmp(name, a->fn.def.name))
 			continue;
 
-		// todo next
-		// if (compatible(a->fn.j))		
+		if (compatible(a->fn.args, arg_rules)) {
+			if (! candidates)
+				candidates = tb_stack_init(4, ast_element);
+
+			tb_vector_insert_tail(candidates, a);
+		}		
 	}
 
-	return 0;
+	return candidates;
 }
 
 request *newreq(scope *scope, char *name, tb_iterator_ref_t args)
@@ -511,9 +532,12 @@ request *newreq(scope *scope, char *name, tb_iterator_ref_t args)
 	request *out = tb_malloc(sizeof(request));
 	tb_iterator_ref_t rules = tb_vector_init(20, rule_element);
 	tb_iterator_ref_t candidates = find_candidates(scope, name, args);
-	if (! candidates)
-		error("no candidates");
-	*out = (request){ .args = args, .rules = rules, .candidates = candidates };
+	if (!candidates)
+		error("no candidates for '%s'", name);
+	*out = (request){.scope = scope,
+			 .args = args,
+			 .rules = rules,
+			 .candidates = candidates};
 	return out;
 }
 
@@ -534,11 +558,8 @@ rule *newrule(enum e_rule type, char* name)
 	return out;
 }
 
-
-// TODO delme
-void infer(scope *s, ast *fn, request* r) {
-	if (fn->type != A_FN)
-		bug("%s: not fun", __func__);
+void infer(request* r, scope *s, tb_iterator_ref_t reqs) {
+	log("infer %p", r);
 }
 
 int main()
@@ -549,6 +570,7 @@ int main()
 	rule_element = tb_element_mem(sizeof(rule), 0, 0);
 	macro_element = tb_element_mem(sizeof(macro), 0, 0);
 	define_element = tb_element_mem(sizeof(define), 0, 0);
+	request_element = tb_element_mem(sizeof(request), 0, 0);
 
 	tb_vector_ref_t topast = tb_vector_init(128, ast_element);
 	tb_vector_ref_t macros = tb_vector_init(128, ast_element);
@@ -568,21 +590,17 @@ int main()
 		tb_vector_replace(topast, item_itor, transform(macros, item));
 	}
 
-	// tb_size_t main_pos = tb_find_all_if(topast, it_is, F("main"));
-	// if (main_pos == tb_iterator_tail(topast))
-	// 	error("main not found");
-	// ast *main = get(topast, main_pos);
 	scope *top = newscope(topast, 0);
 	tb_vector_ref_t main_rules = tb_vector_init(0, rule_element); // empty
 	request *mainreq = newreq(top, "main", main_rules);
+	tb_vector_ref_t reqs = tb_vector_init(128, request_element);
+	tb_vector_insert_tail(reqs, mainreq);
 
-// typedef struct request {
-// 	char *name;
-// 	tb_iterator_ref_t rules;
-// 	scope scope;
-// } request;
+	for (int i = 0; i < tb_vector_size(reqs); i++) {
+		infer(tb_iterator_item(reqs, i), top, reqs);
+	}
 
-	tb_trace_d("END");
+	log("END");
 
 	// tb_exit();
 }
