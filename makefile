@@ -12,7 +12,7 @@ debug: build/debug/app
 release: build/release/app
 	@$^ < test.r
 
-build/%/app: APPFLAGS += -lm -Ibuild/$* -Isrc -I$(tbox)/src
+build/%/app: APPFLAGS += -lm -Iexternal/klib -Ibuild/$* -Isrc -I$(tbox)/src
 build/%/app: src/main.c build/%/parser.c build/%/libtbox.a | build/%/
 	@echo + $@
 	@$(CC) $(CFLAGS) $(APPFLAGS) $^ -o $@

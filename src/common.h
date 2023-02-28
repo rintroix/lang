@@ -139,10 +139,20 @@ typedef struct scope {
 	struct scope *next;
 } scope;
 
+typedef struct candidate {
+	ast *ast;
+	tb_iterator_ref_t rules;
+} candidate;
+
+#define can(AST, RULES)                                                        \
+	(candidate)                                                            \
+	{                                                                      \
+		.ast = (AST), .rules = (RULES)                                 \
+	}
+
 typedef struct request {
 	struct scope *scope;
 	tb_iterator_ref_t args;
-	tb_iterator_ref_t rules;
 	tb_iterator_ref_t candidates;
 } request;
 

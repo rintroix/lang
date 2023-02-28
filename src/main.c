@@ -3,6 +3,7 @@
 #include <stdlib.h>
 
 #include "tbox/algorithm/find_if.h"
+#include "tbox/algorithm/for.h"
 #include "tbox/container/vector.h"
 #include "tbox/prefix/check.h"
 #include "tbox/tbox.h"
@@ -16,6 +17,7 @@ tb_element_t rule_element;
 tb_element_t macro_element;
 tb_element_t define_element;
 tb_element_t request_element;
+tb_element_t candidate_element;
 
 ast *transform(tb_iterator_ref_t macros, ast *a);
 
@@ -451,6 +453,16 @@ ast *transform(tb_iterator_ref_t macros, ast *a)
 	return a;
 }
 
+scope *newscope1(ast *f, scope *next)
+{
+	tb_assert(f->type == A_FN);
+	scope *out = tb_malloc(sizeof(scope));
+	tb_vector_ref_t functions = tb_vector_init(10, ast_element);
+	tb_vector_insert_tail(functions, f);
+	*out = (scope){.functions = functions, .next = next};
+	return out;
+}
+
 scope *newscope(tb_iterator_ref_t asts, scope *next)
 {
 	scope *out = tb_malloc(sizeof(scope));
@@ -503,6 +515,53 @@ int compatible(tb_iterator_ref_t args, tb_iterator_ref_t rules) {
 	return 1;
 }
 
+void rulify(scope *s, ast *a, tb_iterator_ref_t rules) {
+	switch (a->type) {
+	case A_LIST: {
+		todo;
+	} break;
+
+	case A_FN: {
+		define d = a->fn.def;
+		tb_assert(d.init);
+		scope *fs = newscope1(a, s);
+		rulify(fs, d.init, rules);
+		todo;
+		// open new scope
+		// add self to scope
+		// add args to rules
+
+	} break;
+
+	case A_CALL: {
+		todo;
+	} break;
+
+	case A_ID:
+		todo;
+		break;
+
+	case A_OPER:
+		todo;
+		break;
+
+	case A_BLOCK:
+		todo;
+		break;
+
+	case A_MARK:
+		todo;
+		break;
+	}
+}
+
+int infer(scope *s, candidate* c) {
+	tb_assert(c->ast->type == A_FN);
+	rulify(s, c->ast, c->rules);
+
+	return 1; // todo
+}
+
 tb_iterator_ref_t find_candidates(scope *scope, char *name,
 				  tb_iterator_ref_t arg_rules)
 {
@@ -518,9 +577,14 @@ tb_iterator_ref_t find_candidates(scope *scope, char *name,
 
 		if (compatible(a->fn.args, arg_rules)) {
 			if (! candidates)
-				candidates = tb_stack_init(4, ast_element);
+				candidates = tb_stack_init(4, candidate_element);
 
-			tb_vector_insert_tail(candidates, a);
+			tb_iterator_ref_t rules =
+			    tb_vector_init(20, rule_element);
+
+			candidate c = can(a, rules);
+			if (infer(scope, &c))
+				tb_vector_insert_tail(candidates, &c);
 		}		
 	}
 
@@ -530,13 +594,11 @@ tb_iterator_ref_t find_candidates(scope *scope, char *name,
 request *newreq(scope *scope, char *name, tb_iterator_ref_t args)
 {
 	request *out = tb_malloc(sizeof(request));
-	tb_iterator_ref_t rules = tb_vector_init(20, rule_element);
 	tb_iterator_ref_t candidates = find_candidates(scope, name, args);
 	if (!candidates)
 		error("no candidates for '%s'", name);
 	*out = (request){.scope = scope,
 			 .args = args,
-			 .rules = rules,
 			 .candidates = candidates};
 	return out;
 }
@@ -558,8 +620,8 @@ rule *newrule(enum e_rule type, char* name)
 	return out;
 }
 
-void infer(request* r, scope *s, tb_iterator_ref_t reqs) {
-	log("infer %p", r);
+void compile(request *r) {
+	todo;
 }
 
 int main()
@@ -571,6 +633,7 @@ int main()
 	macro_element = tb_element_mem(sizeof(macro), 0, 0);
 	define_element = tb_element_mem(sizeof(define), 0, 0);
 	request_element = tb_element_mem(sizeof(request), 0, 0);
+	candidate_element = tb_element_mem(sizeof(candidate), 0, 0);
 
 	tb_vector_ref_t topast = tb_vector_init(128, ast_element);
 	tb_vector_ref_t macros = tb_vector_init(128, ast_element);
@@ -593,12 +656,7 @@ int main()
 	scope *top = newscope(topast, 0);
 	tb_vector_ref_t main_rules = tb_vector_init(0, rule_element); // empty
 	request *mainreq = newreq(top, "main", main_rules);
-	tb_vector_ref_t reqs = tb_vector_init(128, request_element);
-	tb_vector_insert_tail(reqs, mainreq);
-
-	for (int i = 0; i < tb_vector_size(reqs); i++) {
-		infer(tb_iterator_item(reqs, i), top, reqs);
-	}
+	compile(mainreq);
 
 	log("END");
 
