@@ -7,10 +7,14 @@ CFLAGS = -pipe
 debug: CFLAGS += -g -O0
 debug: APPFLAGS += -D__tb_debug__ -DDEBUG
 debug: build/debug/app
-	@$^ < test.r
+	@$< < test.r
 
 release: build/release/app
-	@$^ < test.r
+	@$< < test.r
+
+cpp: APPFLAGS += -lm -Iexternal/klib -Ibuild/debug -Isrc -I$(tbox)/src 
+cpp:
+	@cpp $(CFLAGS) $(APPFLAGS) src/main.c | clang-format 
 
 build/%/app: APPFLAGS += -lm -Iexternal/klib -Ibuild/$* -Isrc -I$(tbox)/src
 build/%/app: src/main.c build/%/parser.c build/%/libtbox.a | build/%/
@@ -32,6 +36,13 @@ build/packcc: external/packcc/src/packcc.c | build/
 	@echo + $@
 	@$(CC) $(CFLAGS) $^ -o $@
 
+test: build/test
+	@./$<
+
+build/test: src/test.c
+	@echo + $@
+	@$(CC) $(CFLAGS) $^ -o $@
+
 %/:
 	@mkdir -p $@
 
@@ -41,5 +52,5 @@ clean:
 tools: clean
 	@bear -- make
 
-.PHONY: clean debug release tools
+.PHONY: clean debug release tools test
 .PRECIOUS: %/ build/%/libtbox.a build/%/parser.c   

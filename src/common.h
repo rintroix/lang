@@ -32,9 +32,11 @@ enum ast_type {
 
 enum id_type { I_WORD, I_KW, I_OP };
 
+struct ast;
+
 typedef struct block {
 	tb_iterator_ref_t defs;
-	tb_iterator_ref_t items;
+	vec(struct ast) items;
 } block;
 
 typedef struct ast {

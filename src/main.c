@@ -2,13 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "tbox/algorithm/find_if.h"
-#include "tbox/algorithm/for.h"
-#include "tbox/container/vector.h"
-#include "tbox/prefix/check.h"
 #include "tbox/tbox.h"
 
 #include "common.h"
+#include "data.h"
 #include "parser.h"
 #include "string.h"
 
@@ -420,15 +417,20 @@ block transform_block(tb_iterator_ref_t macros, tb_iterator_ref_t iter,
 		      tb_size_t start, tb_size_t end)
 {
 	tb_check_abort(end >= start);
-	tb_vector_ref_t items = tb_vector_init(end - start, ast_element);
+	vec(struct ast) items;
+	kv_init(items);
 	tb_for(ast *, a, start, end, iter)
 	{
 		ast *b = transform(macros, a);
-		tb_vector_insert_tail(items, b);
+		// push(ast, items, *b);
 	}
 
+	block xxx = {0};
+	xxx.items = items;
+
 	// TODO block needs defs?
-	return (block){.items = items};
+	// return (struct block){.defs = 0, .items = (vec(struct ast)){0}};
+	return xxx;
 }
 
 ast *transform(tb_iterator_ref_t macros, ast *a)
