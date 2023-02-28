@@ -3,7 +3,16 @@
 
 #include "tbox/tbox.h"
 
-#define log(...) tb_trace_i(__VA_ARGS__)
+#include "data.h"
+
+#define _log(FMT, ...) do { printf("%s: " FMT "%s", __func__, __VA_ARGS__); } while (0)
+#define log(...) _log(__VA_ARGS__, "\n")
+
+#ifdef DEBUG
+#  define dbg(...) log("debug: " __VA_ARGS__)
+#else
+#  define dbg(...)
+#endif
 
 typedef struct define {
 	char *name;

@@ -5,7 +5,7 @@ tbox = external/tbox
 CFLAGS = -pipe
 
 debug: CFLAGS += -g -O0
-debug: APPFLAGS += -D__tb_debug__
+debug: APPFLAGS += -D__tb_debug__ -DDEBUG
 debug: build/debug/app
 	@$^ < test.r
 
@@ -24,9 +24,9 @@ build/%/libtbox.a: $(tbox)/build/$(os)/$(arch)/%/libtbox.a | build/%/
 $(tbox)/build/$(os)/$(arch)/%/libtbox.a:
 	cd $(tbox) && ./configure --mode=$* --demo=no && make
 
-build/%/parser.c: src/parser.peg | build/packcc build/%/
-	@echo + $<
-	@cd build/$*/ && ../packcc -o parser ../../$^
+build/%/parser.c: src/parser.peg src/common.h | build/packcc build/%/
+	@echo + $@
+	@cd build/$*/ && ../packcc -o parser ../../$<
  
 build/packcc: external/packcc/src/packcc.c | build/
 	@echo + $@
