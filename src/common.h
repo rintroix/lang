@@ -4,9 +4,12 @@
 #include "tbox/tbox.h"
 
 #include "data.h"
+#include <stdlib.h>
 
 #define _log(FMT, ...) do { printf("%s: " FMT "%s", __func__, __VA_ARGS__); } while (0)
 #define log(...) _log(__VA_ARGS__, "\n")
+
+#define error(...) do { log("error: " __VA_ARGS__); abort(); } while(0)
 
 #ifdef DEBUG
 #  define dbg(...) log("debug: " __VA_ARGS__)

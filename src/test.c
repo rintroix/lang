@@ -47,6 +47,15 @@ TEST vec_init(void) {
 
 	ASSERT(sum == 21);
 
+	um_vec(int) *slice1 = um_vec_slice(v, 2, 5);
+
+	sum = 0;
+	um_vec_for(slice1, it) {
+		sum += *it.value;
+	}
+
+	ASSERT(sum == 12);
+
 	PASS();
 }
 
