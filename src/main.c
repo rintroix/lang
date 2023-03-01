@@ -124,12 +124,21 @@ void print_ast(ast *a)
 	switch (a->type) {
 	case A_LIST: {
 		printf("(");
-		tb_for_all(ast *, item, a->list.items)
-		{
-			if (item != get(a->list.items, 0))
-				printf(" ");
-			print_ast(item);
-		}
+		for (struct um_vec_header *header = um_vec_head(a->list.items);
+		     header; header = header->next)
+			for (struct {
+				     int i;
+				     __typeof__(a->list.items->array[0]) *it;
+			     } _itor = {0,
+					(__typeof__(a->list.items->array[0]) *)
+					    header};
+			     _itor.i < header->count; _itor.i++, _itor.it = (__typeof__(a->list.items->array[0]) *)header + _itor.i)
+			// tb_for_all(ast *, item, a->list.items)
+			{
+				if (_itor.i != 0)
+					printf(" ");
+				print_ast(_itor.it);
+			}
 		printf(")");
 	} break;
 
@@ -188,21 +197,21 @@ tb_bool_t ismark(tb_iterator_ref_t iterator, tb_cpointer_t item,
 
 ast list0()
 {
-	tb_vector_ref_t items = tb_vector_init(10, ast_element);
+	vec(ast) *items = avec();
 	return list(items);
 }
 
 ast list1(ast a)
 {
-	tb_vector_ref_t items = tb_vector_init(10, ast_element);
-	tb_vector_insert_tail(items, &a);
+	vec(ast) *items = avec();
+	push(items, a);
 	return list(items);
 }
 
 ast append(ast l, ast a)
 {
 	tb_check_abort(l.type == A_LIST);
-	tb_vector_insert_tail(l.list.items, &a);
+	push(l.list.items, a);
 	return l;
 }
 

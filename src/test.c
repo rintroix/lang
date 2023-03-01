@@ -40,6 +40,13 @@ TEST vec_init(void) {
 	ASSERT(um_vec_head(v)->next->next);
 	ASSERT(!um_vec_head(v)->next->next->next);
 
+	int sum = 0;
+	um_vec_for(v, it) {
+		sum += *it.value;
+	}
+
+	ASSERT(sum == 21);
+
 	PASS();
 }
 

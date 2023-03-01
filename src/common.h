@@ -51,7 +51,7 @@ struct ast {
 		} fn;
 
 		struct {
-			tb_iterator_ref_t items;
+			vec(ast) *items;
 		} list;
 
 		struct {
