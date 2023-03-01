@@ -1,5 +1,5 @@
 #include "greatest.h"
-#include "data.h"
+#include "um.h"
 
 um_vec_declare(int);
 
@@ -7,7 +7,7 @@ um_vec_declare(int);
 TEST vec_init(void) {
 	um_vec(int) *v = _um_vec_alloc(2 * sizeof(int), 0);
 
-	struct um_vec_header *head = um_vec_head(v);
+	um_vec_head_t *head = um_vec_head(v);
 
 	ASSERT(um_vec_len(v) == 0);
 	ASSERT(um_vec_head(v)->alloc);

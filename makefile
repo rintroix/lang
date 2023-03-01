@@ -40,7 +40,7 @@ test: build/test
 	@./$<
 
 build/test: CFLAGS += -g -O0
-build/test: src/test.c src/data.h | build/
+build/test: src/test.c src/um.h | build/
 	@echo + $@
 	@$(CC) $(CFLAGS) $< -o $@
 
