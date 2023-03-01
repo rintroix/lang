@@ -23,7 +23,6 @@ typedef struct um_vec_head_t {
 #define um_vec_alloc(V) (__typeof__(V))_um_vec_alloc(UM_CACHE_LINE, 0)
 #define um_vec(T) T***
 #define um_vec_head(V) (((um_vec_head_t *)(V)) - 1)
-// TODO len is bugged: need to coune ->next
 #define um_vec_len(V) _um_vec_len(um_vec_head(V)) 
 #define um_vec_for(V, NAME) _um_vec_for_1(V, NAME, _um_head)
 #define um_vec_get(V, N) (*um_vec_at(V, N))
@@ -50,7 +49,7 @@ typedef struct um_vec_head_t {
 		     int index;                                                \
 		     UM_VEC_TYPE1(V) * value;                                  \
 	     }(NAME) = {0};                                                    \
-	     (NAME).count < 1;)                                                \
+	     (NAME).value == 0; (NAME).value++)                                \
 	_um_vec_for_2(V, NAME, H)
 
 #define _um_vec_for_2(V, N, H)                                                 \

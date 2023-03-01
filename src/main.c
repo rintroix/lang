@@ -16,7 +16,7 @@ tb_element_t define_element;
 tb_element_t request_element;
 tb_element_t candidate_element;
 
-ast *transform(tb_iterator_ref_t macros, ast *a);
+ast *transform(vec(macro) macros, ast *a);
 
 #define get(x, y) ((ast *)tb_iterator_item(x, y))
 
@@ -95,10 +95,14 @@ tb_bool_t it_is(tb_iterator_ref_t iterator, tb_cpointer_t item,
 	return is((ast *)item, (ast *)data);
 }
 
-int has(tb_iterator_ref_t list, ast *pattern)
+int has(vec(ast) list, ast *pattern)
 {
-	tb_size_t pos = tb_find_all_if(list, it_is, pattern);
-	return pos != tb_iterator_tail(list);
+	vfor(list, it)
+	{
+		if (is(it.value, pattern))
+			return 1;
+	}
+	return 0;
 }
 
 void print_ast(ast *a)
@@ -156,7 +160,6 @@ void print_ast(ast *a)
 void printl_ast(ast *a)
 {
 	print_ast(a);
-	puts("");
 }
 
 tb_bool_t ismark(tb_iterator_ref_t iterator, tb_cpointer_t item,
@@ -304,6 +307,7 @@ void destroy_ast(ast *a)
 vec(define) funargs(vec(ast) list)
 {
 	vec(define) out = avec(out);
+	um_vec_head_t *head = um_vec_head(list);
 
 	define *last = 0;
 	vfor(list, it)
@@ -338,7 +342,7 @@ vec(ast) convert_slice(tb_iterator_ref_t items) {
 	return out;
 }
 
-ast* atom_or_list(tb_iterator_ref_t iter, tb_size_t start, tb_size_t end) {
+ast* atom_or_list(vec(ast) iter, tb_size_t start, tb_size_t end) {
 	tb_assert(end >= start);
 	switch (end - start) {
 	case 0:
@@ -346,24 +350,35 @@ ast* atom_or_list(tb_iterator_ref_t iter, tb_size_t start, tb_size_t end) {
 		break;
 
 	case 1:
-		return get(iter, start);
+		return vat(iter, start);
 		break;
 
 	default:
-		return lift(list(convert_slice(slice(iter, start, end))));
+		return lift(list(vslice(iter, start, end)));
 		break;
 	}
 }
 
-ast* operate(tb_iterator_ref_t macros, tb_iterator_ref_t list, tb_size_t start)
+ast* operate(vec(macro) macros, vec(ast) list, tb_size_t start)
 {
-	tb_size_t pos = tb_find_if(list, start, tb_iterator_tail(list), it_is, O(0));
-	tb_size_t end = tb_iterator_tail(list);
+	// TODO better find
+	size_t pos = -1;
+	vfor(list, it) {
+		if (it.index < start)
+			continue;
+
+		if (is(it.value, O(0))) {
+			pos = it.index;
+			break;
+		}
+	}
+
+	size_t end = vlen(list);
 
 	if (start == end)
 		bug("%s: received empty", __func__);
 
-	if (pos == end) {
+	if (pos == -1) {
 		// TODO check empty list
 		return transform(macros, atom_or_list(list, start, end));
 	}
@@ -372,10 +387,10 @@ ast* operate(tb_iterator_ref_t macros, tb_iterator_ref_t list, tb_size_t start)
 		bug("%s: operator without left side", __func__);
 	}
 
-	tb_assert(pos > start);
+	assert(pos > start);
 
-	ast *op = tb_iterator_item(list, pos);
-	tb_assert(op->type == A_ID && op->id.type == I_OP);
+	ast *op = vat(list, pos);
+	assert(op->type == A_ID && op->id.type == I_OP);
 
 	ast *left = transform(macros, atom_or_list(list, start, pos));
 	return lift(oper(op->id.name, left, operate(macros, list, pos + 1)));
@@ -399,16 +414,16 @@ int _match(vec(ast) list, ast **patterns, size_t n)
 #define MA(...) ((ast *[]){__VA_ARGS__})
 #define match(L, ...) _match(L, MA(__VA_ARGS__), LEN(MA(__VA_ARGS__)))
 
-block transform_block(tb_iterator_ref_t macros, tb_iterator_ref_t iter,
-		      tb_size_t start, tb_size_t end)
+block transform_block(vec(macro) macros, vec(ast) iter, size_t start,
+		      size_t end)
 {
 	tb_check_abort(end >= start);
 
 	vec(ast) items = avec(items);
 
-	tb_for(ast *, a, start, end, iter)
+	vfor(iter, it)
 	{
-		ast *b = transform(macros, a);
+		ast *b = transform(macros, it.value);
 		push(items, *b);
 	}
 
@@ -416,7 +431,7 @@ block transform_block(tb_iterator_ref_t macros, tb_iterator_ref_t iter,
 	return (struct block){.defs = 0, .items = items};
 }
 
-ast *transform(tb_iterator_ref_t macros, ast *a)
+ast *transform(vec(macro) macros, ast *a)
 {
 	// TODO compactor first
 
@@ -429,7 +444,7 @@ ast *transform(tb_iterator_ref_t macros, ast *a)
 		char *type = vat(items, 2)->id.name;
 		vec(define) args = funargs(vat(items, 3)->list.items);
 		ast *init = lift(ablock(transform_block(
-		    macros, items, 4, tb_iterator_tail(items))));
+		    macros, items, 4, vlen(items))));
 		return lift(fn(def(name, type, init), args));
 	} else if (has(items, O(0))) {
 		return operate(macros, items, 0);
@@ -442,25 +457,25 @@ scope *newscope1(ast *f, scope *next)
 {
 	tb_assert(f->type == A_FN);
 	scope *out = tb_malloc(sizeof(scope));
-	tb_vector_ref_t functions = tb_vector_init(10, ast_element);
-	tb_vector_insert_tail(functions, f);
+	vec(ast) functions = avec(functions);
+	push(functions, *f);
 	*out = (scope){.functions = functions, .next = next};
 	return out;
 }
 
-scope *newscope(tb_iterator_ref_t asts, scope *next)
+scope *newscope(vec(ast) asts, scope *next)
 {
 	scope *out = tb_malloc(sizeof(scope));
-	tb_vector_ref_t functions =
-	    tb_vector_init(tb_iterator_size(asts), ast_element);
-	tb_for_all(ast*, a, asts)
+	vec(ast) functions = avec(functions);
+
+	vfor(asts, it)
 	{
-		switch(a->type) {
+		switch(it.value->type) {
 		case A_FN:
-			tb_vector_insert_tail(functions, a);
+			push(functions, *it.value);
 			break;
 		default:
-			bug("%s: unhandled %d", __func__, a->type);
+			bug("%s: unhandled %d", __func__, it.value->type);
 			break;
 		}
 	}
@@ -488,8 +503,8 @@ int satisfies(rule *r, define *d) {
 	}
 }
 
-int compatible(tb_iterator_ref_t args, tb_iterator_ref_t rules) {
-	if (tb_iterator_size(args) != tb_iterator_size(rules))
+int compatible(vec(define) args, tb_iterator_ref_t rules) {
+	if (vlen(args) != tb_iterator_size(rules))
 		return 0;
 
 	tb_for_all(define*, arg, args) {
@@ -547,29 +562,26 @@ int infer(scope *s, candidate* c) {
 	return 1; // todo
 }
 
-tb_iterator_ref_t find_candidates(scope *scope, char *name,
-				  tb_iterator_ref_t arg_rules)
+vec(candidate)
+    find_candidates(scope *scope, char *name, tb_iterator_ref_t arg_rules)
 {
-	tb_iterator_ref_t candidates = 0;
-	
-	tb_for_all(ast *, a, scope->functions)
+	vec(candidate) candidates = avec(candidates);
+
+	vfor(scope->functions, it)
 	{
-		if (a->type != A_FN)
+		if (it.value->type != A_FN)
 			bug("%s: not fun", __func__);
 
-		if (0 != strcmp(name, a->fn.def.name))
+		if (0 != strcmp(name, it.value->fn.def.name))
 			continue;
 
-		if (compatible(a->fn.args, arg_rules)) {
-			if (! candidates)
-				candidates = tb_stack_init(4, candidate_element);
-
+		if (compatible(it.value->fn.args, arg_rules)) {
 			tb_iterator_ref_t rules =
 			    tb_vector_init(20, rule_element);
 
-			candidate c = can(a, rules);
+			candidate c = can(it.value, rules);
 			if (infer(scope, &c))
-				tb_vector_insert_tail(candidates, &c);
+				push(candidates, c);
 		}		
 	}
 
@@ -579,8 +591,8 @@ tb_iterator_ref_t find_candidates(scope *scope, char *name,
 request *newreq(scope *scope, char *name, tb_iterator_ref_t args)
 {
 	request *out = tb_malloc(sizeof(request));
-	tb_iterator_ref_t candidates = find_candidates(scope, name, args);
-	if (!candidates)
+	vec(candidate) candidates = find_candidates(scope, name, args);
+	if (!vlen(candidates))
 		error("no candidates for '%s'", name);
 	*out = (request){.scope = scope,
 			 .args = args,
@@ -620,23 +632,27 @@ int main()
 	request_element = tb_element_mem(sizeof(request), 0, 0);
 	candidate_element = tb_element_mem(sizeof(candidate), 0, 0);
 
-	tb_vector_ref_t topast = tb_vector_init(128, ast_element);
-	tb_vector_ref_t macros = tb_vector_init(128, ast_element);
+	vec(ast) topast = avec(topast);
+	vec(macro) macros = avec(macros);
 
 	ast a;
 	pcc_context_t *ctx = pcc_create(0);
 	while (pcc_parse(ctx, &a)) {
 		// TODO recognise macro
-		tb_vector_insert_tail(topast, lift(a));
+		push(topast, a);
 	}
 	pcc_destroy(ctx);
 
 	if (a.type != 0) 
 		bug("%s: parser top level return", __func__);
 
-	tb_for_all(ast *, item, topast) {
-		tb_vector_replace(topast, item_itor, transform(macros, item));
+	vfor(topast, it) {
+		*vat(topast, it.index) = *transform(macros, it.value);
 	}
+
+	// tb_for_all(ast *, item, topast) {
+	// 	tb_vector_replace(topast, item_itor, transform(macros, item));
+	// }
 
 	scope *top = newscope(topast, 0);
 	tb_vector_ref_t main_rules = tb_vector_init(0, rule_element); // empty
@@ -647,4 +663,5 @@ int main()
 
 	// tb_exit();
 }
+
 

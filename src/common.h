@@ -70,7 +70,7 @@ struct ast {
 	union {
 		struct {
 			define def;
-			tb_iterator_ref_t args;
+			vec(define) args;
 		} fn;
 
 		struct {
@@ -137,7 +137,7 @@ typedef struct macro {
 } macro;
 
 typedef struct scope {
-	tb_iterator_ref_t functions;
+	vec(ast) functions;
 	struct scope *next;
 } scope;
 
@@ -146,16 +146,12 @@ typedef struct candidate {
 	tb_iterator_ref_t rules;
 } candidate;
 
-#define can(AST, RULES)                                                        \
-	(candidate)                                                            \
-	{                                                                      \
-		.ast = (AST), .rules = (RULES)                                 \
-	}
+#define can(AST, RULES) ((candidate){.ast = (AST), .rules = (RULES)})
 
 typedef struct request {
 	struct scope *scope;
 	tb_iterator_ref_t args;
-	tb_iterator_ref_t candidates;
+	vec(candidate) candidates;
 } request;
 
 enum e_rule {
