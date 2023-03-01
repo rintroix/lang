@@ -1,11 +1,9 @@
 #include "greatest.h"
 #include "um.h"
 
-um_vec_declare(int);
-
 /* A test runs various assertions, then calls PASS(), FAIL(), or SKIP(). */
 TEST vecs(void) {
-	um_vec(int) *v = (um_vec(int)*)_um_vec_alloc(2 * sizeof(int), 0);
+	um_vec(int) v = (um_vec(int))_um_vec_alloc(2 * sizeof(int), 0);
 
 	um_vec_head_t *head = um_vec_head(v);
 
@@ -47,7 +45,7 @@ TEST vecs(void) {
 
 	ASSERT(sum == 21);
 
-	um_vec(int) *slice1 = um_vec_slice(v, 2, 5);
+	um_vec(int) slice1 = um_vec_slice(v, 2, 5);
 
 	sum = 0;
 	um_vec_for(slice1, it) {
