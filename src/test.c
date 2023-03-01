@@ -4,8 +4,8 @@
 um_vec_declare(int);
 
 /* A test runs various assertions, then calls PASS(), FAIL(), or SKIP(). */
-TEST vec_init(void) {
-	um_vec(int) *v = _um_vec_alloc(2 * sizeof(int), 0);
+TEST vecs(void) {
+	um_vec(int) *v = (um_vec(int)*)_um_vec_alloc(2 * sizeof(int), 0);
 
 	um_vec_head_t *head = um_vec_head(v);
 
@@ -59,9 +59,18 @@ TEST vec_init(void) {
 	PASS();
 }
 
+void foo(int *i) {
+	
+}
+
+TEST anon_structs(void) {
+	PASS();
+}
+
 /* Suites can group multiple tests with common setup. */
 SUITE(vec_suite) {
-    RUN_TEST(vec_init);
+    RUN_TEST(vecs);
+    RUN_TEST(anon_structs);
 }
 
 GREATEST_MAIN_DEFS();

@@ -11,6 +11,10 @@ typedef struct um_vec_head_t {
 	struct um_vec_head_t *next;
 } um_vec_head_t;
 
+typedef struct _um_vec_of_void {
+	void *array;
+} _um_vec_of_void;
+ 
 #ifndef UM_CACHE_LINE
 #define UM_CACHE_LINE 128
 #endif
@@ -20,13 +24,14 @@ typedef struct um_vec_head_t {
 #define UM_VEC_SIZE1(V) sizeof(UM_VEC_ITEM(V))
 #define UM_VEC_DATA(V, H) ((UM_VEC_TYPE1(V) *)((H) + 1)) 
 
-#define um_vec_alloc() _um_vec_alloc(UM_CACHE_LINE, 0)
+#define um_vec_alloc(V) (__typeof__(V))_um_vec_alloc(UM_CACHE_LINE, 0)
 #define um_vec(T) struct um_vec_of_##T
 #define um_vec_head(V) (((um_vec_head_t *)(V)) - 1)
 #define um_vec_len(V) (um_vec_head(V)->count)
 #define um_vec_for(V, NAME) _um_vec_for_1(V, NAME, _um_head)
 #define um_vec_slice(V, START, END)                                            \
-	_um_vec_slice(um_vec_head(V), UM_VEC_SIZE1(V), START, END)
+	(__typeof__(V))_um_vec_slice(um_vec_head(V), UM_VEC_SIZE1(V), START,   \
+				     END)
 
 #define um_vec_declare(T)                                                      \
 	um_vec(T)                                                              \
@@ -69,7 +74,7 @@ static inline void _um_vec_verify(um_vec_head_t *head) {
 	assert(head->alloc);
 }
 
-static inline void *_um_vec_alloc(size_t alloc, um_vec_head_t *next)
+static inline _um_vec_of_void* _um_vec_alloc(size_t alloc, um_vec_head_t *next)
 {
 	assert(alloc);
 	um_vec_head_t *mem =
@@ -77,7 +82,7 @@ static inline void *_um_vec_alloc(size_t alloc, um_vec_head_t *next)
 	assert(mem);
 	*mem = (um_vec_head_t){.alloc = alloc, .next = next};
 	assert(mem->alloc);
-	return mem + 1;
+	return (_um_vec_of_void*)(mem + 1);
 }
 
 static inline void *_um_vec_at(um_vec_head_t *head, size_t one, size_t index)
@@ -102,7 +107,7 @@ static inline void * _um_vec_push_to(um_vec_head_t *head, size_t one)
 	return _um_vec_push_to(head->next, one);
 }
 
-static inline void *_um_vec_slice(um_vec_head_t *head, size_t one, size_t start,
+static inline _um_vec_of_void *_um_vec_slice(um_vec_head_t *head, size_t one, size_t start,
 				  size_t end)
 {
 	_um_vec_verify(head);
@@ -113,7 +118,7 @@ static inline void *_um_vec_slice(um_vec_head_t *head, size_t one, size_t start,
 		head = head->next;
 	}
 
-	um_vec_head_t *out = um_vec_head(um_vec_alloc());
+	um_vec_head_t *out = um_vec_head(_um_vec_alloc(head->alloc, 0));
 	_um_vec_verify(out);
 
 	// TODO better memcpy
@@ -137,7 +142,7 @@ static inline void *_um_vec_slice(um_vec_head_t *head, size_t one, size_t start,
 		}
 	}
 
-	return out + 1;
+	return (_um_vec_of_void*)(out + 1);
 }
 
 #endif // UM_H
