@@ -23,8 +23,12 @@ typedef struct um_vec_head_t {
 #define um_vec_alloc(V) (__typeof__(V))_um_vec_alloc(UM_CACHE_LINE, 0)
 #define um_vec(T) T***
 #define um_vec_head(V) (((um_vec_head_t *)(V)) - 1)
-#define um_vec_len(V) (um_vec_head(V)->count)
+// TODO len is bugged: need to coune ->next
+#define um_vec_len(V) _um_vec_len(um_vec_head(V)) 
 #define um_vec_for(V, NAME) _um_vec_for_1(V, NAME, _um_head)
+#define um_vec_get(V, N) (*um_vec_at(V, N))
+#define um_vec_at(V, N)                                                        \
+	(UM_VEC_TYPE1(V) *)_um_vec_at(um_vec_head(V), UM_VEC_SIZE1(V), (N))
 #define um_vec_slice(V, START, END)                                            \
 	(__typeof__(V))_um_vec_slice(um_vec_head(V), UM_VEC_SIZE1(V), START,   \
 				     END)
@@ -37,8 +41,6 @@ typedef struct um_vec_head_t {
 		*_um_push_to_ptr = (ITEM);                                     \
 	} while (0)
 
-#define um_vec_at(V, N)                                                        \
-	(UM_VEC_TYPE1(V) *)_um_vec_at(um_vec_head(V), UM_VEC_SIZE1(V), (N))
 
 #define um_vec_verify(V) _um_vec_verify(um_vec_head(V))
 
@@ -135,6 +137,15 @@ static inline char *_um_vec_slice(um_vec_head_t *head, size_t one, size_t start,
 	}
 
 	return (char*)(out + 1);
+}
+
+static inline size_t _um_vec_len(um_vec_head_t *head) {
+	size_t len = 0;
+	do {
+		len += head->count;
+		head = head->next;
+	} while (head);
+	return len;
 }
 
 #endif // UM_H

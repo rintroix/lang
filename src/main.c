@@ -20,24 +20,6 @@ ast *transform(tb_iterator_ref_t macros, ast *a);
 
 #define get(x, y) ((ast *)tb_iterator_item(x, y))
 
-#define todo                                                                   \
-	do {                                                                   \
-		tb_trace_noimpl();                                             \
-		exit(3);                                                       \
-	} while (0)
-
-#define bug(...)                                                               \
-	do {                                                                   \
-		tb_trace_e("compiler bug: " __VA_ARGS__);                      \
-		exit(2);                                                       \
-	} while (0)
-
-#define error(...)                                                             \
-	do {                                                                   \
-		tb_trace_e(__VA_ARGS__);                                       \
-		exit(1);                                                       \
-	} while (0)
-
 ast *lift(ast a)
 {
 	ast *ptr = tb_malloc(sizeof(ast));
@@ -124,21 +106,11 @@ void print_ast(ast *a)
 	switch (a->type) {
 	case A_LIST: {
 		printf("(");
-		for (struct um_vec_header *header = um_vec_head(a->list.items);
-		     header; header = header->next)
-			for (struct {
-				     int i;
-				     __typeof__(a->list.items->array[0]) *it;
-			     } _itor = {0,
-					(__typeof__(a->list.items->array[0]) *)
-					    header};
-			     _itor.i < header->count; _itor.i++, _itor.it = (__typeof__(a->list.items->array[0]) *)header + _itor.i)
-			// tb_for_all(ast *, item, a->list.items)
-			{
-				if (_itor.i != 0)
-					printf(" ");
-				print_ast(_itor.it);
-			}
+		vfor(a->list.items, it) {
+			if (it.index != 0)
+				printf(" ");
+			printl_ast(it.value);
+		}
 		printf(")");
 	} break;
 
@@ -197,13 +169,13 @@ tb_bool_t ismark(tb_iterator_ref_t iterator, tb_cpointer_t item,
 
 ast list0()
 {
-	vec(ast) *items = avec();
+	vec(ast) items = avec(items);
 	return list(items);
 }
 
 ast list1(ast a)
 {
-	vec(ast) *items = avec();
+	vec(ast) items = avec(items);
 	push(items, a);
 	return list(items);
 }
@@ -329,35 +301,40 @@ void destroy_ast(ast *a)
 // 	}
 // }
 
-tb_iterator_ref_t funargs(tb_iterator_ref_t list)
+vec(define) funargs(vec(ast) list)
 {
-	tb_vector_ref_t out =
-	    tb_vector_init(tb_iterator_size(list), define_element);
+	vec(define) out = avec(out);
 
 	define *last = 0;
-	tb_for_all(ast *, arg, list)
+	vfor(list, it)
 	{
-		if (arg->type != A_ID)
+		if (it.value->type != A_ID)
 			error("fun arg not an identifier");
 
-		switch (arg->id.type) {
+		switch (it.value->id.type) {
 		case I_WORD: {
-			tb_vector_insert_tail(out, &def(arg->id.name, 0, 0));
-			last = tb_vector_last(out);
+			push(out, def(it.value->id.name, 0, 0));
+			last = vat(out, vlen(out) - 1); // TODO last()
 		} break;
 
 		case I_KW:
 			if (last->type)
 				error("several keywords after fun arg");
-			last->type = arg->id.name;
+			last->type = it.value->id.name;
 			break;
 
 		default:
-			error("unexpected fun arg type: %d", arg->type);
+			error("unexpected fun arg type: %d", it.value->type);
 			break;
 		}
 	}
 
+	return out;
+}
+
+vec(ast) convert_slice(tb_iterator_ref_t items) {
+	vec(ast) out = avec(out);
+	tb_for_all(ast *, a, items) { push(out, *a); }
 	return out;
 }
 
@@ -373,7 +350,7 @@ ast* atom_or_list(tb_iterator_ref_t iter, tb_size_t start, tb_size_t end) {
 		break;
 
 	default:
-		return lift(list(slice(iter, start, end)));
+		return lift(list(convert_slice(slice(iter, start, end))));
 		break;
 	}
 }
@@ -404,18 +381,18 @@ ast* operate(tb_iterator_ref_t macros, tb_iterator_ref_t list, tb_size_t start)
 	return lift(oper(op->id.name, left, operate(macros, list, pos + 1)));
 }
 
-int _match(tb_vector_ref_t list, ast **patterns, size_t n)
+int _match(vec(ast) list, ast **patterns, size_t n)
 {
-	tb_for_all(ast *, a, list)
+	vfor(list, it)
 	{
-		if (a_itor == n)
+		if (it.index == n)
 			return 1;
 
-		if (!is(a, patterns[a_itor]))
+		if (!is(it.value, patterns[it.index]))
 			return 0;
 	}
 
-	return tb_iterator_size(list) == n;
+	return vlen(list) == n;
 }
 
 #define LEN(A) (sizeof(A)/sizeof((A)[0]))
@@ -427,7 +404,7 @@ block transform_block(tb_iterator_ref_t macros, tb_iterator_ref_t iter,
 {
 	tb_check_abort(end >= start);
 
-	vec(ast) *items = avec();
+	vec(ast) items = avec(items);
 
 	tb_for(ast *, a, start, end, iter)
 	{
@@ -446,11 +423,11 @@ ast *transform(tb_iterator_ref_t macros, ast *a)
 	if (a->type != A_LIST)
 		return a;
 
-	tb_iterator_ref_t items = a->list.items;
+	vec(ast) items = a->list.items;
 	if (match(items, W("fn"), W(0), K(0), L(0))) {
-		char *name = get(items, 1)->id.name;
-		char *type = get(items, 2)->id.name;
-		tb_iterator_ref_t args = funargs(get(items, 3)->list.items);
+		char *name = vat(items, 1)->id.name;
+		char *type = vat(items, 2)->id.name;
+		vec(define) args = funargs(vat(items, 3)->list.items);
 		ast *init = lift(ablock(transform_block(
 		    macros, items, 4, tb_iterator_tail(items))));
 		return lift(fn(def(name, type, init), args));

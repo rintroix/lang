@@ -28,12 +28,14 @@ TEST vecs(void) {
 	um_vec_push(v, 5);
 	um_vec_push(v, 6);
 
+	ASSERT(um_vec_len(v) == 6);
+
 	ASSERT(*um_vec_at(v, 0) == 1);
 	ASSERT(*um_vec_at(v, 1) == 2);
 	ASSERT(*um_vec_at(v, 2) == 3);
-	ASSERT(*um_vec_at(v, 3) == 4);
-	ASSERT(*um_vec_at(v, 4) == 5);
-	ASSERT(*um_vec_at(v, 5) == 6);
+	ASSERT(um_vec_get(v, 3) == 4);
+	ASSERT(um_vec_get(v, 4) == 5);
+	ASSERT(um_vec_get(v, 5) == 6);
 
 	ASSERT(um_vec_head(v)->next->next);
 	ASSERT(!um_vec_head(v)->next->next->next);
@@ -53,6 +55,8 @@ TEST vecs(void) {
 	}
 
 	ASSERT(sum == 12);
+
+	ASSERT(um_vec_len(slice1) == 3);
 
 	PASS();
 }

@@ -9,7 +9,29 @@
 #define _log(FMT, ...) do { printf("%s: " FMT "%s", __func__, __VA_ARGS__); } while (0)
 #define log(...) _log(__VA_ARGS__, "\n")
 
-#define error(...) do { log("error: " __VA_ARGS__); abort(); } while(0)
+#define error(...)                                                             \
+	do {                                                                   \
+		log("error: " __VA_ARGS__);                                    \
+		abort();                                                       \
+	} while (0)
+
+#define todo                                                                   \
+	do {                                                                   \
+		log("%s: TODO", __func__);                                     \
+		abort();                                                      \
+	} while (0)
+
+#define bug(...)                                                               \
+	do {                                                                   \
+		log("compiler bug: " __VA_ARGS__);                             \
+		abort();                                                       \
+	} while (0)
+
+#define error(...)                                                             \
+	do {                                                                   \
+		log("error: " __VA_ARGS__);                                    \
+		abort();                                                       \
+	} while (0)
 
 #ifdef DEBUG
 #  define dbg(...) log("debug: " __VA_ARGS__)
@@ -38,11 +60,9 @@ enum id_type { I_WORD, I_KW, I_OP };
 
 typedef struct ast ast;
 
-declare_vec(ast);
-
 typedef struct block {
 	tb_iterator_ref_t defs;
-	vec(ast) *items;
+	vec(ast) items;
 } block;
 
 struct ast {
@@ -54,7 +74,7 @@ struct ast {
 		} fn;
 
 		struct {
-			vec(ast) *items;
+			vec(ast) items;
 		} list;
 
 		struct {
@@ -77,63 +97,28 @@ struct ast {
 	};
 };
 
-#define op(NAME)                                                               \
-	(ast)                                                                  \
-	{                                                                      \
-		.type = A_ID, .id = {.name = (NAME), .type = I_OP }            \
-	}
+#define op(NAME) ((ast){.type = A_ID, .id = {.name = (NAME), .type = I_OP}})
 
-#define kw(NAME)                                                               \
-	(ast)                                                                  \
-	{                                                                      \
-		.type = A_ID, .id = {.name = (NAME), .type = I_KW }            \
-	}
+#define kw(NAME) ((ast){.type = A_ID, .id = {.name = (NAME), .type = I_KW}})
 
-#define word(NAME)                                                             \
-	(ast)                                                                  \
-	{                                                                      \
-		.type = A_ID, .id = {.name = (NAME), .type = I_WORD }          \
-	}
+#define word(NAME) ((ast){.type = A_ID, .id = {.name = (NAME), .type = I_WORD}})
 
-#define ablock(BLOCK)                                                          \
-	(ast)                                                                  \
-	{                                                                      \
-		.type = A_BLOCK, .block = (BLOCK)                              \
-	}
+#define ablock(BLOCK) ((ast){.type = A_BLOCK, .block = (BLOCK)})
 
-#define list(ITEMS)                                                            \
-	(ast)                                                                  \
-	{                                                                      \
-		.type = A_LIST, .list = {.items = (ITEMS) }                    \
-	}
+#define list(ITEMS) ((ast){.type = A_LIST, .list = {.items = (ITEMS)}})
 
 #define call(NAME, ARGS)                                                       \
-	(ast)                                                                  \
-	{                                                                      \
-		.type = A_CALL, .call = {.name = (NAME), .args = (ARGS) }      \
-	}
+	((ast){.type = A_CALL, .call = {.name = (NAME), .args = (ARGS)}})
 
 #define oper(NAME, L, R)                                                       \
-	(ast)                                                                  \
-	{                                                                      \
-		.type = A_OPER, .oper = {                                      \
-			.name = (NAME),                                        \
-			.left = (L),                                           \
-			.right = (R)                                           \
-		}                                                              \
-	}
+	((ast){.type = A_OPER,                                                 \
+	       .oper = {.name = (NAME), .left = (L), .right = (R)}})
 
 #define fn(DEF, ARGS)                                                          \
-	(ast)                                                                  \
-	{                                                                      \
-		.type = A_FN, .fn = {.def = (DEF), .args = (ARGS) }            \
-	}
+	((ast){.type = A_FN, .fn = {.def = (DEF), .args = (ARGS)}})
 
 #define def(NAME, TYPE, INIT)                                                  \
-	(define)                                                               \
-	{                                                                      \
-		.name = NAME, .type = (TYPE), .init = (INIT)                   \
-	}
+	((define){.name = NAME, .type = (TYPE), .init = (INIT)})
 
 ast dot(ast l, ast r);
 ast list0();
