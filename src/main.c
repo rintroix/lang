@@ -417,20 +417,17 @@ block transform_block(tb_iterator_ref_t macros, tb_iterator_ref_t iter,
 		      tb_size_t start, tb_size_t end)
 {
 	tb_check_abort(end >= start);
-	vec(struct ast) items;
-	kv_init(items);
+
+	vec(ast) *items = avec();
+
 	tb_for(ast *, a, start, end, iter)
 	{
 		ast *b = transform(macros, a);
-		// push(ast, items, *b);
+		push(items, *b);
 	}
 
-	block xxx = {0};
-	xxx.items = items;
-
 	// TODO block needs defs?
-	// return (struct block){.defs = 0, .items = (vec(struct ast)){0}};
-	return xxx;
+	return (struct block){.defs = 0, .items = items};
 }
 
 ast *transform(tb_iterator_ref_t macros, ast *a)

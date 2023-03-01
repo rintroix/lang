@@ -39,9 +39,10 @@ build/packcc: external/packcc/src/packcc.c | build/
 test: build/test
 	@./$<
 
-build/test: src/test.c
+build/test: CFLAGS += -g -O0
+build/test: src/test.c src/data.h | build/
 	@echo + $@
-	@$(CC) $(CFLAGS) $^ -o $@
+	@$(CC) $(CFLAGS) $< -o $@
 
 %/:
 	@mkdir -p $@

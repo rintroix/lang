@@ -1,30 +1,44 @@
 #include "greatest.h"
 #include "data.h"
 
-um_vec_type(int);
+um_vec_declare(int);
 
 /* A test runs various assertions, then calls PASS(), FAIL(), or SKIP(). */
 TEST vec_init(void) {
-	um_vec(int) *v = um_vec_alloc(int, 2);
+	um_vec(int) *v = _um_vec_alloc(2 * sizeof(int), 0);
 
-	ASSERT(v->count == 0);
-	ASSERT(v->max == 2);
-	ASSERT(v->alloc);
-	ASSERT(! v->next);
+	struct um_vec_header *head = um_vec_head(v);
+
+	ASSERT(um_vec_len(v) == 0);
+	ASSERT(um_vec_head(v)->alloc);
+	ASSERT(!um_vec_head(v)->next);
 
 	um_vec_push(v, 1);
 	um_vec_push(v, 2);
 
-	ASSERT(! v->next);
+	ASSERT_EQ(um_vec_head(v)->count, 2);
+	ASSERT(!um_vec_head(v)->next);
 
 	um_vec_push(v, 3);
 	um_vec_push(v, 4);
 
-	ASSERT(v->next);
-	ASSERT(! v->next->next);
+	ASSERT_EQ(um_vec_head(v)->count, 2);
+	ASSERT_EQ(um_vec_head(v)->next->count, 2);
+	ASSERT(um_vec_head(v)->next);
+	ASSERT(! um_vec_head(v)->next->next);
 
-	ASSERT(v->next->data[0] == 3);
-	ASSERT(v->next->data[1] == 4);
+	um_vec_push(v, 5);
+	um_vec_push(v, 6);
+
+	ASSERT(*um_vec_at(v, 0) == 1);
+	ASSERT(*um_vec_at(v, 1) == 2);
+	ASSERT(*um_vec_at(v, 2) == 3);
+	ASSERT(*um_vec_at(v, 3) == 4);
+	ASSERT(*um_vec_at(v, 4) == 5);
+	ASSERT(*um_vec_at(v, 5) == 6);
+
+	ASSERT(um_vec_head(v)->next->next);
+	ASSERT(!um_vec_head(v)->next->next->next);
 
 	PASS();
 }

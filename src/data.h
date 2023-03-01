@@ -4,56 +4,66 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct um_vec_generic {
+struct um_vec_header {
 	size_t count;
-	size_t max;
 	size_t alloc;
-	struct um_vec_generic *next;
+	struct um_vec_header *next;
 };
 
-#define um_vec(T) struct um_vec_of_##T
+#ifndef UM_CACHE_LINE
+#define UM_CACHE_LINE 128
+#endif
 
-#define um_vec_declare_type(T)                                                 \
+#define um_vec_alloc() _um_vec_alloc(UM_CACHE_LINE, 0)
+#define um_vec(T) struct um_vec_of_##T
+#define um_vec_head(V) (((struct um_vec_header *)(V)) - 1)
+#define um_vec_len(V) (um_vec_head(V)->count)
+#define um_vec_declare(T)                                                      \
 	um_vec(T)                                                              \
 	{                                                                      \
-		size_t count;                                                  \
-		size_t max;                                                    \
-		size_t alloc;                                                  \
-		um_vec(T) * next;                                              \
-		T data[];                                                      \
+		T *array;                                                      \
 	}
-
-#define um_vec_asize(T, C) (sizeof(struct um_vec_generic) + (C) * sizeof(T))
-
-#define _um_vec_alloc(S, C)                                                    \
-	memcpy(malloc(S), &(struct um_vec_generic){.max = (C), .alloc = (S)},  \
-	       sizeof(struct um_vec_generic))
-
-#define um_vec_alloc(T, C) _um_vec_alloc(um_vec_asize(T, C), C)
-
-static inline void *um_vec_push_head(struct um_vec_generic *head)
-{
-	if (head->count < head->max) {
-		return head;
-	}
-
-	if (!head->next)
-		head->next = _um_vec_alloc(head->alloc, head->max);
-
-	return head->next;
-}
-
 #define um_vec_push(V, ITEM)                                                   \
 	do {                                                                   \
-		__typeof__(V) _head =                                          \
-		    um_vec_push_head((struct um_vec_generic *)V);              \
-		_head->data[(_head->count)++] = (ITEM);                        \
+		__typeof__((V)->array[0]) *_um_push_to_ptr =                   \
+		    _um_vec_push_to(um_vec_head(V), sizeof((V)->array[0]));    \
+		*_um_push_to_ptr = (ITEM);                                     \
 	} while (0)
+#define um_vec_at(V, N)                                                        \
+	(__typeof__((V)->array[0]) *)_um_vec_at(um_vec_head(V),                \
+						sizeof((V)->array[0]), (N))
 
-#define declare_vec(T) um_vec_declare_type(T)
-#define vec(T) um_vec(X)
-#define avec(T, C) um_vec_alloc(T, C)
-#define push(T, V, ITEM)
+#define declare_vec(T) um_vec_declare(T)
+#define vec(T) um_vec(T)
+#define avec() um_vec_alloc()
+#define push(V, ITEM) um_vec_push(V, ITEM)
+
+static inline void *_um_vec_alloc(size_t alloc, struct um_vec_header *next)
+{
+	struct um_vec_header *mem =
+	    malloc(sizeof(struct um_vec_header) + alloc);
+	*mem = (struct um_vec_header){.alloc = alloc, .next = next};
+	return mem + 1;
+}
+
+static inline void *_um_vec_at(struct um_vec_header *head, size_t one, size_t index)
+{
+	if (index >= head->count)
+		return _um_vec_at(head->next, one, index - head->count);
+
+	return ((char*)(head + 1)) + one * index;
+}
+
+static inline void * _um_vec_push_to(struct um_vec_header *head, size_t one)
+{
+	if ((head->count + 1) * one <= head->alloc)
+		return ((char *)(head + 1)) + one * head->count++;
+
+	if (!head->next)
+		head->next = um_vec_head(_um_vec_alloc(head->alloc, 0));
+
+	return _um_vec_push_to(head->next, one);
+}
 
 #endif
 
@@ -67,15 +77,10 @@ static inline void *um_vec_push_head(struct um_vec_generic *head)
 		size_t n, m;                                                   \
 		type *a;                                                       \
 	}
-#define kv_init(v) ((v).n = (v).m = 0, (v).a = 0)
-#define kv_destroy(v) free((v).a)
 #define kv_A(v, i) ((v).a[(i)])
 #define kv_pop(v) ((v).a[--(v).n])
 #define kv_size(v) ((v).n)
 #define kv_max(v) ((v).m)
-
-#define kv_resize(type, v, s)                                                  \
-	((v).m = (s), (v).a = (type *)realloc((v).a, sizeof(type) * (v).m))
 
 #define kv_copy(type, v1, v0)                                                  \
 	do {                                                                   \

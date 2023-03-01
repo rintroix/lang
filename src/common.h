@@ -32,14 +32,17 @@ enum ast_type {
 
 enum id_type { I_WORD, I_KW, I_OP };
 
-struct ast;
+
+typedef struct ast ast;
+
+declare_vec(ast);
 
 typedef struct block {
 	tb_iterator_ref_t defs;
-	vec(struct ast) items;
+	vec(ast) *items;
 } block;
 
-typedef struct ast {
+struct ast {
 	enum ast_type type;
 	union {
 		struct {
@@ -67,9 +70,9 @@ typedef struct ast {
 			struct ast *right;
 		} oper;
 
-		block block;
+		struct block block;
 	};
-} ast;
+};
 
 #define op(NAME)                                                               \
 	(ast)                                                                  \
