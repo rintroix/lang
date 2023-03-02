@@ -4,16 +4,21 @@ CFLAGS='-g -O0 -D__tb_debug__ -DDEBUG -pipe -fno-omit-frame-pointer'
 
 for arg; do
 	case "$arg" in
-		clean) rm -vrf build/; exit 0;; 
+		clean)   rm -vrf build/;; 
+		d|debug) "$0"; gdb ./build/app;;
+		r|run)   "$0"; ./build/app < test.r;;
+		*) echo >&2 WAT: "$@"; exit 1;;
 	esac
 done
+
+[ $# -eq 0 ] || exit 0
 
 ok() {
 	[ -f "$1" ] || return 1
 	for d; do [ "$1" -ef "$d" -o "$1" -nt "$d" ] || return 1; done;
 }
 
-OB() { ok "$@" || { ${CC:-cc} ${CFLAGS:-} -c -o "$@"; echo c "$1"; } }
+OB() { ok "$@" || { ${CC:-cc} ${CFLAGS:-} -c -o "$1" "$2"; echo c "$1"; } }
 CC() { ok "$@" || { ${CC:-cc} ${CFLAGS:-} ${LDFLAGS:-} -o "$@"; echo c "$1"; } }
 PG() { ok "$@" || ( cd build/; ./packcc -o parser ../"$2"; echo g "$1"; ) }
 CP() { ok "$@" || { cp "$2" "$1"; echo - "$1"; } }
@@ -27,11 +32,10 @@ CP build/tbox.config.h external/tbox/build/linux/x86_64/debug/tbox.config.h
 
 CFLAGS="$CFLAGS -Isrc -Ibuild -Iexternal/tbox/src"
 
-OB build/main.o src/main.c
+OB build/main.o src/main.c src/*.h
 OB build/parser.o build/parser.c
 
 LDFLAGS="-lm"
 
 CC build/app build/main.o build/parser.o build/libtbox.a 
 
-./build/app < test.r

@@ -503,8 +503,8 @@ int compatible(vec(define) args, tb_iterator_ref_t rules) {
 	if (vlen(args) != tb_iterator_size(rules))
 		return 0;
 
-	tb_for_all(define*, arg, args) {
-		if (!satisfies(tb_iterator_item(rules, arg_itor), arg))
+	vfori(args, arg, i) {
+		if (!satisfies(tb_iterator_item(rules, i), arg))
 			return 0;
 	}
 

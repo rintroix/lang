@@ -12,25 +12,25 @@
 #define error(...)                                                             \
 	do {                                                                   \
 		log("error: " __VA_ARGS__);                                    \
-		abort();                                                       \
+		exit(1);                                                       \
 	} while (0)
 
 #define todo                                                                   \
 	do {                                                                   \
 		log("%s: TODO", __func__);                                     \
-		abort();                                                      \
+		exit(1);                                                       \
 	} while (0)
 
 #define bug(...)                                                               \
 	do {                                                                   \
 		log("compiler bug: " __VA_ARGS__);                             \
-		abort();                                                       \
+		exit(1);                                                       \
 	} while (0)
 
 #define error(...)                                                             \
 	do {                                                                   \
 		log("error: " __VA_ARGS__);                                    \
-		abort();                                                       \
+		exit(1);                                                       \
 	} while (0)
 
 #ifdef DEBUG
