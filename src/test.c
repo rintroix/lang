@@ -1,5 +1,5 @@
 #include "greatest.h"
-#include "um.h"
+#include "um/um.h"
 
 /* A test runs various assertions, then calls PASS(), FAIL(), or SKIP(). */
 TEST vecs(void) {

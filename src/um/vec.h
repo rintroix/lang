@@ -1,19 +1,11 @@
-#ifndef UM_H
-#define UM_H
+#ifndef UM_VEC_H
+#define UM_VEC_H
 
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
-// UM general
-
-#define UmEval2(X) X
-#define UmEval(X) UmEval2(X)
-#define UmCat2(X, Y) X##Y
-#define UmCat(X, Y) UmCat2(X, Y)
-#define UmGen(X) UmCat(X, __LINE__)
-
-// UM vec
+#include "um/common.h"
 
 #ifndef UM_VEC_CACHE_LINE
 #define UM_VEC_CACHE_LINE 128
@@ -38,8 +30,13 @@ typedef struct um_vec_h {
 #define um_vec_len(V) _um_vec_len(UmVHead(V))
 #define um_vec_for(V, NAME)                                                    \
 	_um_vec_for(V, NAME, UmGen(_h), UmGen(_o), UmGen(_i), UmGen(_c))
+#define um_vec_for_i(V, NAME, INDEX)                                           \
+	_um_vec_for(V, NAME, UmGen(_h), UmGen(_o), (INDEX), UmGen(_c))
 #define um_vec_for_range(V, NAME, START, END)                                  \
 	_um_vec_for_range(V, NAME, UmGen(_h), UmGen(_o), UmGen(_i), UmGen(_c), \
+			  UmGen(_f), UmGen(_s), (START), UmGen(_e), (END))
+#define um_vec_for_range_i(V, NAME, START, END, INDEX)                         \
+	_um_vec_for_range(V, NAME, UmGen(_h), UmGen(_o), (INDEX), UmGen(_c),   \
 			  UmGen(_f), UmGen(_s), (START), UmGen(_e), (END))
 #define um_vec_get(V, N) (*um_vec_at(V, N))
 #define um_vec_at(V, N) (UmVType1(V) *)_um_vec_at(UmVHead(V), UmVSize1(V), (N))
@@ -176,4 +173,4 @@ static inline size_t _um_vec_len(um_vec_h *head)
 	return len;
 }
 
-#endif // UM_H
+#endif // UM_VEC_H

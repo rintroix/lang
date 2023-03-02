@@ -99,7 +99,7 @@ int has(vec(ast) list, ast *pattern)
 {
 	vfor(list, it)
 	{
-		if (is(it.value, pattern))
+		if (is(it, pattern))
 			return 1;
 	}
 	return 0;
@@ -110,10 +110,10 @@ void print_ast(ast *a)
 	switch (a->type) {
 	case A_LIST: {
 		printf("(");
-		vfor(a->list.items, it) {
-			if (it.index != 0)
+		vfori(a->list.items, it, i) {
+			if (i != 0)
 				printf(" ");
-			printl_ast(it.value);
+			printl_ast(it);
 		}
 		printf(")");
 	} break;
@@ -307,28 +307,27 @@ void destroy_ast(ast *a)
 vec(define) funargs(vec(ast) list)
 {
 	vec(define) out = avec(out);
-	um_vec_head_t *head = um_vec_head(list);
 
 	define *last = 0;
 	vfor(list, it)
 	{
-		if (it.value->type != A_ID)
+		if (it->type != A_ID)
 			error("fun arg not an identifier");
 
-		switch (it.value->id.type) {
+		switch (it->id.type) {
 		case I_WORD: {
-			push(out, def(it.value->id.name, 0, 0));
+			push(out, def(it->id.name, 0, 0));
 			last = vat(out, vlen(out) - 1); // TODO last()
 		} break;
 
 		case I_KW:
 			if (last->type)
 				error("several keywords after fun arg");
-			last->type = it.value->id.name;
+			last->type = it->id.name;
 			break;
 
 		default:
-			error("unexpected fun arg type: %d", it.value->type);
+			error("unexpected fun arg type: %d", it->type);
 			break;
 		}
 	}
@@ -362,13 +361,10 @@ ast* atom_or_list(vec(ast) iter, tb_size_t start, tb_size_t end) {
 ast* operate(vec(macro) macros, vec(ast) list, tb_size_t start)
 {
 	// TODO better find
-	size_t pos = -1;
-	vfor(list, it) {
-		if (it.index < start)
-			continue;
-
-		if (is(it.value, O(0))) {
-			pos = it.index;
+	size_t pos = vlen(list);
+	vforri(list, it, start, vlen(list), index) {
+		if (is(it, O(0))) {
+			pos = index;
 			break;
 		}
 	}
@@ -378,7 +374,7 @@ ast* operate(vec(macro) macros, vec(ast) list, tb_size_t start)
 	if (start == end)
 		bug("%s: received empty", __func__);
 
-	if (pos == -1) {
+	if (pos == end) {
 		// TODO check empty list
 		return transform(macros, atom_or_list(list, start, end));
 	}
@@ -398,12 +394,12 @@ ast* operate(vec(macro) macros, vec(ast) list, tb_size_t start)
 
 int _match(vec(ast) list, ast **patterns, size_t n)
 {
-	vfor(list, it)
+	vfori(list, it, index)
 	{
-		if (it.index == n)
+		if (index == n)
 			return 1;
 
-		if (!is(it.value, patterns[it.index]))
+		if (!is(it, patterns[index]))
 			return 0;
 	}
 
@@ -423,7 +419,7 @@ block transform_block(vec(macro) macros, vec(ast) iter, size_t start,
 
 	vfor(iter, it)
 	{
-		ast *b = transform(macros, it.value);
+		ast *b = transform(macros, it);
 		push(items, *b);
 	}
 
@@ -470,12 +466,12 @@ scope *newscope(vec(ast) asts, scope *next)
 
 	vfor(asts, it)
 	{
-		switch(it.value->type) {
+		switch(it->type) {
 		case A_FN:
-			push(functions, *it.value);
+			push(functions, *it);
 			break;
 		default:
-			bug("%s: unhandled %d", __func__, it.value->type);
+			bug("%s: unhandled %d", __func__, it->type);
 			break;
 		}
 	}
@@ -569,17 +565,17 @@ vec(candidate)
 
 	vfor(scope->functions, it)
 	{
-		if (it.value->type != A_FN)
+		if (it->type != A_FN)
 			bug("%s: not fun", __func__);
 
-		if (0 != strcmp(name, it.value->fn.def.name))
+		if (0 != strcmp(name, it->fn.def.name))
 			continue;
 
-		if (compatible(it.value->fn.args, arg_rules)) {
+		if (compatible(it->fn.args, arg_rules)) {
 			tb_iterator_ref_t rules =
 			    tb_vector_init(20, rule_element);
 
-			candidate c = can(it.value, rules);
+			candidate c = can(it, rules);
 			if (infer(scope, &c))
 				push(candidates, c);
 		}		
@@ -647,7 +643,7 @@ int main()
 		bug("%s: parser top level return", __func__);
 
 	vfor(topast, it) {
-		*vat(topast, it.index) = *transform(macros, it.value);
+		*it = *transform(macros, it);
 	}
 
 	// tb_for_all(ast *, item, topast) {
