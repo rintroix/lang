@@ -1,36 +1,27 @@
 #ifndef COMMON_H_
 #define COMMON_H_
 
-#include "tbox/tbox.h"
-
-#include "data.h"
 #include <stdlib.h>
 
-#define _log(FMT, ...) do { printf("%s: " FMT "%s", __func__, __VA_ARGS__); } while (0)
+#include "data.h"
+
 #define log(...) _log(__VA_ARGS__, "\n")
+#define _log(FMT, ...)                                                         \
+	printf("%s:%d %s: " FMT "%s", __FILE__, __LINE__, __func__, __VA_ARGS__)
 
-#define error(...)                                                             \
+#define _elog(CODE, ...)                                                       \
 	do {                                                                   \
-		log("error: " __VA_ARGS__);                                    \
-		exit(1);                                                       \
+		log(__VA_ARGS__);                                              \
+		exit(CODE);                                                    \
 	} while (0)
 
-#define todo                                                                   \
+#define todo _elog(2, "TODO")
+#define bug(...) _elog(127, "compiler bug: " __VA_ARGS__);
+#define error(...) _elog(1, "error: " __VA_ARGS__);
+#define check(...)                                                             \
 	do {                                                                   \
-		log("%s: TODO", __func__);                                     \
-		exit(1);                                                       \
-	} while (0)
-
-#define bug(...)                                                               \
-	do {                                                                   \
-		log("compiler bug: " __VA_ARGS__);                             \
-		exit(1);                                                       \
-	} while (0)
-
-#define error(...)                                                             \
-	do {                                                                   \
-		log("error: " __VA_ARGS__);                                    \
-		exit(1);                                                       \
+		if (!(__VA_ARGS__))                                            \
+			_elog(1, "check failed: %s", #__VA_ARGS__);            \
 	} while (0)
 
 #ifdef DEBUG
@@ -61,7 +52,7 @@ enum id_type { I_WORD, I_KW, I_OP };
 typedef struct ast ast;
 
 typedef struct block {
-	tb_iterator_ref_t defs;
+	vec(define) defs;
 	vec(ast) items;
 } block;
 
@@ -79,7 +70,7 @@ struct ast {
 
 		struct {
 			char *name;
-			tb_iterator_ref_t args;
+			vec(ast) args;
 		} call;
 
 		struct {
@@ -143,14 +134,14 @@ typedef struct scope {
 
 typedef struct candidate {
 	ast *ast;
-	tb_iterator_ref_t rules;
+	vec(struct rule) rules;
 } candidate;
 
 #define can(AST, RULES) ((candidate){.ast = (AST), .rules = (RULES)})
 
 typedef struct request {
 	struct scope *scope;
-	tb_iterator_ref_t args;
+	vec(struct rule) args;
 	vec(candidate) candidates;
 } request;
 

@@ -1,5 +1,5 @@
-top:
-	@./rebuild
+run:
+	@./rebuild run
 
 clean:
 	@./rebuild clean

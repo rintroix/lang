@@ -25,17 +25,15 @@ CP() { ok "$@" || { cp "$2" "$1"; echo - "$1"; } }
 
 mkdir -p build/
 
-CC build/packcc        external/packcc/src/packcc.c
-PG build/parser.c      src/parser.peg
-CP build/libtbox.a     external/tbox/build/linux/x86_64/debug/libtbox.a
-CP build/tbox.config.h external/tbox/build/linux/x86_64/debug/tbox.config.h
+CC build/packcc   external/packcc/src/packcc.c
+PG build/parser.c src/parser.peg
 
-CFLAGS="$CFLAGS -Isrc -Ibuild -Iexternal/tbox/src"
+CFLAGS="$CFLAGS -Isrc -Ibuild"
 
 OB build/main.o src/main.c src/*.h
 OB build/parser.o build/parser.c
 
 LDFLAGS="-lm"
 
-CC build/app build/main.o build/parser.o build/libtbox.a 
+CC build/app build/main.o build/parser.o 
 

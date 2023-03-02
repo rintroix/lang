@@ -2,38 +2,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "tbox/tbox.h"
-
 #include "common.h"
 #include "data.h"
 #include "parser.h"
-#include "string.h"
-
-tb_element_t ast_element;
-tb_element_t rule_element;
-tb_element_t macro_element;
-tb_element_t define_element;
-tb_element_t request_element;
-tb_element_t candidate_element;
 
 ast *transform(vec(macro) macros, ast *a);
 
-#define get(x, y) ((ast *)tb_iterator_item(x, y))
-
 ast *lift(ast a)
 {
-	ast *ptr = tb_malloc(sizeof(ast));
+	ast *ptr = malloc(sizeof(ast));
 	*ptr = a;
 	return ptr;
-}
-
-tb_iterator_ref_t slice(tb_iterator_ref_t iter, tb_size_t start, tb_size_t end) {
-	tb_assert(end >= start);
-	tb_vector_ref_t out = tb_vector_init(end - start, ast_element);
-	tb_for(ast*, item, start, end, iter) {
-		tb_vector_insert_tail(out, item);
-	}
-	return out;
 }
 
 int is(ast *a, ast *pat)
@@ -88,13 +67,6 @@ int is(ast *a, ast *pat)
 	}
 }
 
-tb_bool_t it_is(tb_iterator_ref_t iterator, tb_cpointer_t item,
-		tb_cpointer_t data)
-{
-	(void)iterator;
-	return is((ast *)item, (ast *)data);
-}
-
 int has(vec(ast) list, ast *pattern)
 {
 	vfor(list, it)
@@ -124,13 +96,11 @@ void print_ast(ast *a)
 
 	case A_CALL: {
 		printf("%s(", a->call.name);
-		int i = 0;
-		tb_for_all(ast *, item, a->call.args)
+		vfori(a->call.args, arg, i)
 		{
 			if (i != 0)
 				printf(" ");
-			print_ast(item);
-			i++;
+			print_ast(arg);
 		}
 		printf(")");
 	} break;
@@ -162,14 +132,6 @@ void printl_ast(ast *a)
 	print_ast(a);
 }
 
-tb_bool_t ismark(tb_iterator_ref_t iterator, tb_cpointer_t item,
-		 tb_cpointer_t value)
-{
-	(void)iterator;
-	(void)value;
-	return ((ast *)item)->type == A_MARK;
-}
-
 ast list0()
 {
 	vec(ast) items = avec(items);
@@ -185,57 +147,58 @@ ast list1(ast a)
 
 ast append(ast l, ast a)
 {
-	tb_check_abort(l.type == A_LIST);
+	assert(l.type == A_LIST);
 	push(l.list.items, a);
 	return l;
 }
 
 void destroy_ast(ast *a)
 {
-	switch (a->type) {
-	case A_FN:
-		tb_free(a->fn.def.name);
-		if (a->fn.def.type)
-			tb_free(a->fn.def.type);
-		// if (a->fn.args) // TODO
-		break;
+	todo;
+	// switch (a->type) {
+	// case A_FN:
+	// 	tb_free(a->fn.def.name);
+	// 	if (a->fn.def.type)
+	// 		tb_free(a->fn.def.type);
+	// 	// if (a->fn.args) // TODO
+	// 	break;
 
-	case A_LIST: {
-		tb_for_all(ast *, item, a->call.args) { destroy_ast(item); }
-		tb_stack_clear(a->call.args);
-		tb_stack_exit(a->call.args);
-	} break;
+	// case A_LIST: {
+	// 	tb_for_all(ast *, item, a->call.args) { destroy_ast(item); }
+	// 	tb_stack_clear(a->call.args);
+	// 	tb_stack_exit(a->call.args);
+	// } break;
 
-	case A_CALL: {
-		if (a->call.name)
-			tb_free(a->call.name); // TODO hack, need empty list ast
-		tb_for_all(ast *, item, a->call.args) { destroy_ast(item); }
-		tb_stack_clear(a->call.args);
-		tb_stack_exit(a->call.args);
-	} break;
+	// case A_CALL: {
+	// 	if (a->call.name)
+	// 		tb_free(a->call.name); // TODO hack, need empty list ast
+	// 	tb_for_all(ast *, item, a->call.args) { destroy_ast(item); }
+	// 	tb_stack_clear(a->call.args);
+	// 	tb_stack_exit(a->call.args);
+	// } break;
 
-	case A_ID:
-		tb_free(a->id.name);
-		break;
+	// case A_ID:
+	// 	tb_free(a->id.name);
+	// 	break;
 
-	case A_OPER:
-		tb_free(a->oper.name);
-		if (a->oper.left)
-			destroy_ast(a->oper.left);
-		if (a->oper.right)
-			destroy_ast(a->oper.right);
-		break;
+	// case A_OPER:
+	// 	tb_free(a->oper.name);
+	// 	if (a->oper.left)
+	// 		destroy_ast(a->oper.left);
+	// 	if (a->oper.right)
+	// 		destroy_ast(a->oper.right);
+	// 	break;
 
-	case A_MARK:
-		bug("mark");
-		break;
+	// case A_MARK:
+	// 	bug("mark");
+	// 	break;
 
-	case A_BLOCK:
-		todo;
-		break;
-	}
+	// case A_BLOCK:
+	// 	todo;
+	// 	break;
+	// }
 
-	tb_free(a);
+	// tb_free(a);
 }
 
 // void compile(tb_list_ref_t context, ast *a)
@@ -335,14 +298,8 @@ vec(define) funargs(vec(ast) list)
 	return out;
 }
 
-vec(ast) convert_slice(tb_iterator_ref_t items) {
-	vec(ast) out = avec(out);
-	tb_for_all(ast *, a, items) { push(out, *a); }
-	return out;
-}
-
-ast* atom_or_list(vec(ast) iter, tb_size_t start, tb_size_t end) {
-	tb_assert(end >= start);
+ast* atom_or_list(vec(ast) iter, size_t start, size_t end) {
+	assert(end >= start);
 	switch (end - start) {
 	case 0:
 		bug("%s: empty", __func__);
@@ -358,7 +315,7 @@ ast* atom_or_list(vec(ast) iter, tb_size_t start, tb_size_t end) {
 	}
 }
 
-ast* operate(vec(macro) macros, vec(ast) list, tb_size_t start)
+ast* operate(vec(macro) macros, vec(ast) list, size_t start)
 {
 	// TODO better find
 	size_t pos = vlen(list);
@@ -413,7 +370,7 @@ int _match(vec(ast) list, ast **patterns, size_t n)
 block transform_block(vec(macro) macros, vec(ast) iter, size_t start,
 		      size_t end)
 {
-	tb_check_abort(end >= start);
+	check(end >= start);
 
 	vec(ast) items = avec(items);
 
@@ -451,8 +408,8 @@ ast *transform(vec(macro) macros, ast *a)
 
 scope *newscope1(ast *f, scope *next)
 {
-	tb_assert(f->type == A_FN);
-	scope *out = tb_malloc(sizeof(scope));
+	assert(f->type == A_FN);
+	scope *out = malloc(sizeof(scope));
 	vec(ast) functions = avec(functions);
 	push(functions, *f);
 	*out = (scope){.functions = functions, .next = next};
@@ -461,7 +418,7 @@ scope *newscope1(ast *f, scope *next)
 
 scope *newscope(vec(ast) asts, scope *next)
 {
-	scope *out = tb_malloc(sizeof(scope));
+	scope *out = malloc(sizeof(scope));
 	vec(ast) functions = avec(functions);
 
 	vfor(asts, it)
@@ -499,19 +456,19 @@ int satisfies(rule *r, define *d) {
 	}
 }
 
-int compatible(vec(define) args, tb_iterator_ref_t rules) {
-	if (vlen(args) != tb_iterator_size(rules))
+int compatible(vec(define) args, vec(rule) rules) {
+	if (vlen(args) != vlen(rules))
 		return 0;
 
 	vfori(args, arg, i) {
-		if (!satisfies(tb_iterator_item(rules, i), arg))
+		if (!satisfies(vat(rules, i), arg))
 			return 0;
 	}
 
 	return 1;
 }
 
-void rulify(scope *s, ast *a, tb_iterator_ref_t rules) {
+void rulify(scope *s, ast *a, vec(rule) rules) {
 	switch (a->type) {
 	case A_LIST: {
 		todo;
@@ -519,7 +476,7 @@ void rulify(scope *s, ast *a, tb_iterator_ref_t rules) {
 
 	case A_FN: {
 		define d = a->fn.def;
-		tb_assert(d.init);
+		assert(d.init);
 		scope *fs = newscope1(a, s);
 		rulify(fs, d.init, rules);
 		todo;
@@ -552,14 +509,14 @@ void rulify(scope *s, ast *a, tb_iterator_ref_t rules) {
 }
 
 int infer(scope *s, candidate* c) {
-	tb_assert(c->ast->type == A_FN);
+	assert(c->ast->type == A_FN);
 	rulify(s, c->ast, c->rules);
 
 	return 1; // todo
 }
 
 vec(candidate)
-    find_candidates(scope *scope, char *name, tb_iterator_ref_t arg_rules)
+    find_candidates(scope *scope, char *name, vec(rule) arg_rules)
 {
 	vec(candidate) candidates = avec(candidates);
 
@@ -572,8 +529,7 @@ vec(candidate)
 			continue;
 
 		if (compatible(it->fn.args, arg_rules)) {
-			tb_iterator_ref_t rules =
-			    tb_vector_init(20, rule_element);
+			vec(rule) rules = avec(rules);
 
 			candidate c = can(it, rules);
 			if (infer(scope, &c))
@@ -584,9 +540,9 @@ vec(candidate)
 	return candidates;
 }
 
-request *newreq(scope *scope, char *name, tb_iterator_ref_t args)
+request *newreq(scope *scope, char *name, vec(rule) args)
 {
-	request *out = tb_malloc(sizeof(request));
+	request *out = malloc(sizeof(request));
 	vec(candidate) candidates = find_candidates(scope, name, args);
 	if (!vlen(candidates))
 		error("no candidates for '%s'", name);
@@ -598,7 +554,7 @@ request *newreq(scope *scope, char *name, tb_iterator_ref_t args)
 
 rule *newrule(enum e_rule type, char* name)
 {
-	rule *out = tb_malloc(sizeof(rule));
+	rule *out = malloc(sizeof(rule));
 	switch (type) {
 	case R_EMPTY:
 		*out = (rule){.type = type};
@@ -619,15 +575,6 @@ void compile(request *r) {
 
 int main()
 {
-	tb_check_abort(tb_init(0, 0));
-
-	ast_element = tb_element_mem(sizeof(ast), 0, 0);
-	rule_element = tb_element_mem(sizeof(rule), 0, 0);
-	macro_element = tb_element_mem(sizeof(macro), 0, 0);
-	define_element = tb_element_mem(sizeof(define), 0, 0);
-	request_element = tb_element_mem(sizeof(request), 0, 0);
-	candidate_element = tb_element_mem(sizeof(candidate), 0, 0);
-
 	vec(ast) topast = avec(topast);
 	vec(macro) macros = avec(macros);
 
@@ -646,18 +593,13 @@ int main()
 		*it = *transform(macros, it);
 	}
 
-	// tb_for_all(ast *, item, topast) {
-	// 	tb_vector_replace(topast, item_itor, transform(macros, item));
-	// }
 
 	scope *top = newscope(topast, 0);
-	tb_vector_ref_t main_rules = tb_vector_init(0, rule_element); // empty
+	vec(rule) main_rules = avec(main_rules);
 	request *mainreq = newreq(top, "main", main_rules);
 	compile(mainreq);
 
 	log("END");
-
-	// tb_exit();
 }
 
 
