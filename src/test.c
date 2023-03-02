@@ -3,27 +3,27 @@
 
 /* A test runs various assertions, then calls PASS(), FAIL(), or SKIP(). */
 TEST vecs(void) {
-	um_vec(int) v = (um_vec(int))_um_vec_alloc(2 * sizeof(int), 0);
+	um_vec(int) v = um_vec_alloc_manual(v, 2);
 
-	um_vec_head_t *head = um_vec_head(v);
+	um_vec_head_t *head = UmVecHead(v);
 
 	ASSERT(um_vec_len(v) == 0);
-	ASSERT(um_vec_head(v)->alloc);
-	ASSERT(!um_vec_head(v)->next);
+	ASSERT(head->alloc);
+	ASSERT(!head->next);
 
 	um_vec_push(v, 1);
 	um_vec_push(v, 2);
 
-	ASSERT_EQ(um_vec_head(v)->count, 2);
-	ASSERT(!um_vec_head(v)->next);
+	ASSERT_EQ(head->count, 2);
+	ASSERT(!head->next);
 
 	um_vec_push(v, 3);
 	um_vec_push(v, 4);
 
-	ASSERT_EQ(um_vec_head(v)->count, 2);
-	ASSERT_EQ(um_vec_head(v)->next->count, 2);
-	ASSERT(um_vec_head(v)->next);
-	ASSERT(! um_vec_head(v)->next->next);
+	ASSERT_EQ(head->count, 2);
+	ASSERT_EQ(head->next->count, 2);
+	ASSERT(head->next);
+	ASSERT(! head->next->next);
 
 	um_vec_push(v, 5);
 	um_vec_push(v, 6);
@@ -37,8 +37,8 @@ TEST vecs(void) {
 	ASSERT(um_vec_get(v, 4) == 5);
 	ASSERT(um_vec_get(v, 5) == 6);
 
-	ASSERT(um_vec_head(v)->next->next);
-	ASSERT(!um_vec_head(v)->next->next->next);
+	ASSERT(head->next->next);
+	ASSERT(!head->next->next->next);
 
 	int sum = 0;
 	um_vec_for(v, it) {
@@ -66,6 +66,7 @@ void foo(int *i) {
 }
 
 TEST anon_structs(void) {
+
 	PASS();
 }
 
