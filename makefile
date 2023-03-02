@@ -4,37 +4,52 @@ tbox = external/tbox
 
 CFLAGS = -pipe
 
+VPATH = build:src:external/packcc/src
+
 debug: CFLAGS += -g -O0
 debug: APPFLAGS += -D__tb_debug__ -DDEBUG
-debug: build/debug/app
+debug: M = debug
+debug: build/app
 	@$< < test.r
 
-release: build/release/app
-	@$< < test.r
+release: XXX = $@
+release: M = release
+release: clean build/app
+	@echo I RELEASED $(XXX)
 
-cpp: APPFLAGS += -lm -Iexternal/klib -Ibuild/debug -Isrc -I$(tbox)/src 
+build/release/%.o build/debug/%.o: %.c | build/%/
+	@echo o $@
+	@$(CC) $(CFLAGS) -c $< -o $@ 
+
+cpp: CFLAGS += -Ibuild -Isrc -I$(tbox)/src 
 cpp:
 	@cpp $(CFLAGS) $(APPFLAGS) src/main.c | clang-format 
 
-build/%/app: APPFLAGS += -lm -Iexternal/klib -Ibuild/$* -Isrc -I$(tbox)/src
-build/%/app: src/main.c build/%/parser.c build/%/libtbox.a | build/%/
-	@echo + $@
-	@$(CC) $(CFLAGS) $(APPFLAGS) $^ -o $@
+build/main.o: build/tbox.config.h build/parser.h
 
-build/%/libtbox.a: $(tbox)/build/$(os)/$(arch)/%/libtbox.a | build/%/
-	@cp $< $@
-	@cp $(tbox)/build/$(os)/$(arch)/$*/tbox.config.h build/$*/
+build/app: CFLAGS += -Ibuild -Isrc -I$(tbox)/src $(APPFLAGS)
+build/app: build/main.o build/parser.o build/libtbox.a  
+	@echo b $@
+	@$(CC) -lm -o $@ $^
 
-$(tbox)/build/$(os)/$(arch)/%/libtbox.a:
+build/tbox.config.h: | build/
+	@echo c $@
+	@cp $(tbox)/build/$(os)/$(arch)/$(M)/tbox.config.h $@
+ 
+build/libtbox.a: | build/
+	@echo a $@
+	@cp $(tbox)/build/$(os)/$(arch)/$(M)/libtbox.a $@
+
+$(tbox)/build/$(os)/$(arch)/$(M)/libtbox.a:
 	cd $(tbox) && ./configure --mode=$* --demo=no && make
 
-build/%/parser.c: src/parser.peg src/common.h | build/packcc build/%/
-	@echo + $@
-	@cd build/$*/ && ../packcc -o parser ../../$<
+build/parser.c build/parser.h &: parser.peg | build/packcc
+	@echo g $@
+	@cd build && ./packcc -o parser ../$<
  
-build/packcc: external/packcc/src/packcc.c | build/
-	@echo + $@
-	@$(CC) $(CFLAGS) $^ -o $@
+build/packcc: packcc.c | build/
+	@echo b $@
+	@$(CC) $^ -o $@
 
 test: build/test
 	@./$<
@@ -45,6 +60,7 @@ build/test: src/test.c | build/
 	@$(CC) $(CFLAGS) $< -o $@
 
 %/:
+	@echo d $@
 	@mkdir -p $@
 
 clean:
@@ -54,4 +70,4 @@ tools: clean
 	@bear -- make
 
 .PHONY: clean debug release tools test
-.PRECIOUS: %/ build/%/libtbox.a build/%/parser.c   
+.SUFFIXES:
