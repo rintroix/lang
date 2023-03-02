@@ -19,77 +19,92 @@
 #define UM_VEC_CACHE_LINE 128
 #endif
 
-typedef struct um_vec_head_t {
+typedef struct um_vec_h {
 	size_t count;
 	size_t alloc;
-	struct um_vec_head_t *next;
-} um_vec_head_t;
+	struct um_vec_h *next;
+} um_vec_h;
 
-#define UmVecItem(V) (***(V))
-#define UmVecType1(V) __typeof__(UmVecItem(V))
-#define UmVecSize1(V) sizeof(UmVecItem(V))
-#define UmVecData(V, H) ((UmVecType1(V) *)((H) + 1))
-#define UmVecHead(V) (((um_vec_head_t *)(V)) - 1)
+#define UmVItem(V) (***(V))
+#define UmVType1(V) __typeof__(UmVItem(V))
+#define UmVSize1(V) sizeof(UmVItem(V))
+#define UmVData(V, H) ((UmVType1(V) *)((H) + 1))
+#define UmVHead(V) (((um_vec_h *)(V)) - 1)
 
 #define um_vec_alloc(V) (__typeof__(V))_um_vec_alloc(UM_VEC_CACHE_LINE, 0)
 #define um_vec_alloc_manual(V, N)                                              \
-	(__typeof__(V))_um_vec_alloc((N)*UmVecSize1(V), 0)
+	(__typeof__(V))_um_vec_alloc((N)*UmVSize1(V), 0)
 #define um_vec(T) T ***
-#define um_vec_len(V) _um_vec_len(UmVecHead(V))
-#define um_vec_for(V, NAME) _um_vec_for_1(V, NAME, UmGen(_hd), UmGen(_fr))
+#define um_vec_len(V) _um_vec_len(UmVHead(V))
+#define um_vec_for(V, NAME)                                                    \
+	_um_vec_for(V, NAME, UmGen(_h), UmGen(_o), UmGen(_i), UmGen(_c))
+#define um_vec_for_range(V, NAME, START, END)                                  \
+	_um_vec_for_range(V, NAME, UmGen(_h), UmGen(_o), UmGen(_i), UmGen(_c), \
+			  UmGen(_f), UmGen(_s), (START), UmGen(_e), (END))
 #define um_vec_get(V, N) (*um_vec_at(V, N))
-#define um_vec_at(V, N)                                                        \
-	(UmVecType1(V) *)_um_vec_at(UmVecHead(V), UmVecSize1(V), (N))
+#define um_vec_at(V, N) (UmVType1(V) *)_um_vec_at(UmVHead(V), UmVSize1(V), (N))
 #define um_vec_slice(V, START, END)                                            \
-	(__typeof__(V))_um_vec_slice(UmVecHead(V), UmVecSize1(V), START, END)
+	(__typeof__(V))_um_vec_slice(UmVHead(V), UmVSize1(V), START, END)
 
 #define um_vec_push(V, ITEM)                                                   \
 	do {                                                                   \
-		UmVecType1(V) *_um_push_to_ptr =                               \
-		    (UmVecType1(V) *)_um_vec_push_to(UmVecHead(V),             \
-						     UmVecSize1(V));           \
+		UmVType1(V) *_um_push_to_ptr =                                 \
+		    (UmVType1(V) *)_um_vec_push_to(UmVHead(V), UmVSize1(V));   \
 		*_um_push_to_ptr = (ITEM);                                     \
 	} while (0)
 
-#define um_vec_verify(V) _um_vec_verify(UmVecHead(V))
+#define um_vec_verify(V) _um_vec_verify(UmVHead(V))
 
-#define _um_vec_for_1(V, NAME, H, OUTER)                                       \
-	for (int(OUTER) = 1; (OUTER); (OUTER) = 0)                             \
-		for (struct {                                                  \
-			     int count;                                        \
-			     int index;                                        \
-			     UmVecType1(V) * value;                            \
-		     }(NAME) = {0};                                            \
-		     (OUTER); (OUTER) = 0)                                     \
-	_um_vec_for_2(V, NAME, H, OUTER)
+#define _um_vec_for(V, N, H, O, I, C)                                          \
+	for (int(O) = 1, (C) = 0, (I) = 0; (O); (O) = 0)                       \
+		for (UmVType1(V) * (N); (O); (O) = 0)                          \
+			for (um_vec_h * (H) = UmVHead(V); (H);                 \
+			     (H) = (H)->next)                                  \
+				for ((C) = 0, (N) = UmVData(V, H);             \
+				     (C) < (H)->count;                         \
+				     (C)++, (I)++, (N) = UmVData(V, H) + (C))
 
-#define _um_vec_for_2(V, N, H, O)                                              \
-	for (um_vec_head_t * (H) = UmVecHead(V); (H); (H) = (H)->next)         \
-	_um_vec_for_3(V, N, H, O)
+#define _um_vec_for_range(V, N, H, O, I, C, F, S, SI, E, EI)                   \
+	for (int(O) = 1, (F), (C), (I) = 0, (S) = (SI), (E) = (EI); O;         \
+	     (O) = 0)                                                          \
+		for (UmVType1(V) * (N); (O); (O) = 0)                          \
+			for (um_vec_h * (H) =                                  \
+				 UmVRewind(UmVHead(V), &(S), &(E));            \
+			     (O) && (H); (H) = (H)->next)                      \
+				for ((C) = (S), (S) = 0,                       \
+				    (N) = UmVData(V, H) + (C),                 \
+				    (F) = (E) <= (H)->count ? ((O) = 0, (E))   \
+							    : (H)->count;      \
+				     (C) < (F);                                \
+				     (C)++, (I)++, (N) = UmVData(V, H) + (C))
 
-#define _um_vec_for_3(V, N, H, O)                                              \
-	for ((N).count = 0, (N).value = UmVecData(V, H);                       \
-	     (N).count < (H)->count; (N).count++, (N).index++,                 \
-	    (N).value = UmVecData(V, H) + (N).count)
+static inline um_vec_h* UmVRewind(um_vec_h *head, int *start, int *end) {
+	while (*start > head->count) {
+		*start -= head->count;
+		*end -= head->count;
+		head = head->next;
+	}
+	return head;
+}
 
-static inline void _um_vec_verify(um_vec_head_t *head)
+static inline void _um_vec_verify(um_vec_h *head)
 {
 	// TODO delme
 	assert(head);
 	assert(head->alloc);
 }
 
-static inline char *_um_vec_alloc(size_t alloc, um_vec_head_t *next)
+static inline char *_um_vec_alloc(size_t alloc, um_vec_h *next)
 {
 	assert(alloc);
-	um_vec_head_t *mem = malloc(sizeof(um_vec_head_t) + alloc);
+	um_vec_h *mem = malloc(sizeof(um_vec_h) + alloc);
 	assert(mem);
-	*mem = (um_vec_head_t){.alloc = alloc, .next = next};
+	*mem = (um_vec_h){.alloc = alloc, .next = next};
 	assert(mem->alloc);
 	return (char *)(mem + 1);
 }
 
-static inline char *_um_vec_at(um_vec_head_t *head, size_t one, size_t index)
+static inline char *_um_vec_at(um_vec_h *head, size_t one, size_t index)
 {
 	while (index >= head->count) {
 		index -= head->count;
@@ -99,7 +114,7 @@ static inline char *_um_vec_at(um_vec_head_t *head, size_t one, size_t index)
 	return ((char *)(head + 1)) + one * index;
 }
 
-static inline char *_um_vec_push_to(um_vec_head_t *head, size_t one)
+static inline char *_um_vec_push_to(um_vec_h *head, size_t one)
 {
 	_um_vec_verify(head);
 
@@ -107,12 +122,12 @@ static inline char *_um_vec_push_to(um_vec_head_t *head, size_t one)
 		return ((char *)(head + 1)) + one * head->count++;
 
 	if (!head->next)
-		head->next = UmVecHead(_um_vec_alloc(head->alloc, 0));
+		head->next = UmVHead(_um_vec_alloc(head->alloc, 0));
 
 	return _um_vec_push_to(head->next, one);
 }
 
-static inline char *_um_vec_slice(um_vec_head_t *head, size_t one, size_t start,
+static inline char *_um_vec_slice(um_vec_h *head, size_t one, size_t start,
 				  size_t end)
 {
 	// TODO
@@ -124,7 +139,7 @@ static inline char *_um_vec_slice(um_vec_head_t *head, size_t one, size_t start,
 		head = head->next;
 	}
 
-	um_vec_head_t *out = UmVecHead(_um_vec_alloc(head->alloc, 0));
+	um_vec_h *out = UmVHead(_um_vec_alloc(head->alloc, 0));
 	_um_vec_verify(out);
 
 	// TODO optimize memcpy in blocks
@@ -151,7 +166,7 @@ static inline char *_um_vec_slice(um_vec_head_t *head, size_t one, size_t start,
 	return (char *)(out + 1);
 }
 
-static inline size_t _um_vec_len(um_vec_head_t *head)
+static inline size_t _um_vec_len(um_vec_h *head)
 {
 	size_t len = 0;
 	do {

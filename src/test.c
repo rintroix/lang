@@ -5,7 +5,7 @@
 TEST vecs(void) {
 	um_vec(int) v = um_vec_alloc_manual(v, 2);
 
-	um_vec_head_t *head = UmVecHead(v);
+	um_vec_h *head = UmVHead(v);
 
 	ASSERT(um_vec_len(v) == 0);
 	ASSERT(head->alloc);
@@ -42,21 +42,26 @@ TEST vecs(void) {
 
 	int sum = 0;
 	um_vec_for(v, it) {
-		sum += *it.value;
+		sum += *it;
 	}
-
 	ASSERT(sum == 21);
+
+	sum = 0;
+	um_vec_for_range(v, it, 3, 6) {
+		sum += *it;
+	}
+	ASSERT(sum == 15);
 
 	um_vec(int) slice1 = um_vec_slice(v, 2, 5);
 
 	sum = 0;
 	um_vec_for(slice1, it) {
-		sum += *it.value;
+		sum += *it;
 	}
 
 	ASSERT(sum == 12);
-
 	ASSERT(um_vec_len(slice1) == 3);
+
 
 	PASS();
 }
