@@ -1,0 +1,37 @@
+#!/bin/sh -eu
+
+CFLAGS='-g -O0 -D__tb_debug__ -DDEBUG -pipe -fno-omit-frame-pointer'
+
+for arg; do
+	case "$arg" in
+		clean) rm -vrf build/; exit 0;; 
+	esac
+done
+
+ok() {
+	[ -f "$1" ] || return 1
+	for d; do [ "$1" -ef "$d" -o "$1" -nt "$d" ] || return 1; done;
+}
+
+OB() { ok "$@" || { ${CC:-cc} ${CFLAGS:-} -c -o "$@"; echo c "$1"; } }
+CC() { ok "$@" || { ${CC:-cc} ${CFLAGS:-} ${LDFLAGS:-} -o "$@"; echo c "$1"; } }
+PG() { ok "$@" || ( cd build/; ./packcc -o parser ../"$2"; echo g "$1"; ) }
+CP() { ok "$@" || { cp "$2" "$1"; echo - "$1"; } }
+
+mkdir -p build/
+
+CC build/packcc        external/packcc/src/packcc.c
+PG build/parser.c      src/parser.peg
+CP build/libtbox.a     external/tbox/build/linux/x86_64/debug/libtbox.a
+CP build/tbox.config.h external/tbox/build/linux/x86_64/debug/tbox.config.h
+
+CFLAGS="$CFLAGS -Isrc -Ibuild -Iexternal/tbox/src"
+
+OB build/main.o src/main.c
+OB build/parser.o build/parser.c
+
+LDFLAGS="-lm"
+
+CC build/app build/main.o build/parser.o build/libtbox.a 
+
+./build/app < test.r
