@@ -7,6 +7,8 @@ for arg; do
 		c|clean) for x in build; do rm -rf "$x"; echo - "$x"; done;; 
 		d|debug) "$0"; gdb ./build/app;;
 		r|run)   "$0"; ./build/app < ex.r;;
+		t|tools) bear -- "$0" c b;; 
+		b|build) "$0";;
 		*) echo >&2 WAT: "$@"; exit 1;;
 	esac
 done
