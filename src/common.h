@@ -127,6 +127,7 @@ typedef struct macro {
 
 typedef struct scope {
 	vec(ast) functions;
+	vec(define) defs;
 	struct scope *next;
 } scope;
 
@@ -146,7 +147,7 @@ typedef struct request {
 enum e_rule {
 	R_EMPTY = 1,
 	R_IS,
-	R_CALL,
+	R_REQ,
 };
 
 typedef struct rule {
@@ -155,6 +156,8 @@ typedef struct rule {
 		struct {
 			char *name;
 		} is;
+
+		request req;
 	};
 } rule;
 

@@ -96,12 +96,11 @@ static inline um_vec_h *UmVRewind(um_vec_h *head, int *start, int *end)
 	return head;
 }
 
-static inline void _um_vec_verify(um_vec_h *head)
-{
-	// TODO delme
-	assert(head);
-	assert(head->alloc);
-}
+#define _um_vec_verify(H)                                                      \
+	do {                                                                   \
+		assert((H));                                                   \
+		assert((H)->alloc);                                            \
+	} while (0)
 
 static inline char *_um_vec_alloc(size_t alloc, um_vec_h *next)
 {
@@ -139,10 +138,10 @@ static inline char *_um_vec_push_to(um_vec_h *head, size_t one)
 static inline char *_um_vec_slice(um_vec_h *head, size_t one, size_t start,
 				  size_t end)
 {
-	// TODO
 	_um_vec_verify(head);
+	assert(end >= start);
 
-	while (start > head->count) {
+	while (start >= head->count) {
 		start -= head->count;
 		end -= head->count;
 		head = head->next;
@@ -154,12 +153,11 @@ static inline char *_um_vec_slice(um_vec_h *head, size_t one, size_t start,
 	// TODO optimize memcpy in blocks
 	for (;; start = 0, end -= head->count, head = head->next) {
 		_um_vec_verify(head);
-		if (end < head->count) {
+		if (end <= head->count) {
 			for (size_t i = start; i < end; i++) {
 				void *dst = (void *)_um_vec_push_to(out, one);
 				void *src = ((char *)(head + 1)) + i * one;
 				memcpy(dst, src, one);
-				_um_vec_verify(head);
 			}
 			break;
 		} else {
@@ -167,7 +165,6 @@ static inline char *_um_vec_slice(um_vec_h *head, size_t one, size_t start,
 				void *dst = (void *)_um_vec_push_to(out, one);
 				void *src = ((char *)(head + 1)) + i * one;
 				memcpy(dst, src, one);
-				_um_vec_verify(head);
 			}
 		}
 	}
