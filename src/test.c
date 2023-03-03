@@ -42,7 +42,7 @@ TEST vecs(void)
 	ASSERT(!head->next->next->next);
 
 	int sum = 0;
-	um_vec_for(v, it) { sum += *it; }
+	um_vec_for(v, it, i) { sum += *it; }
 	ASSERT(sum == 21);
 
 	sum = 0;

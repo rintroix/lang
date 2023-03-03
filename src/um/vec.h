@@ -22,26 +22,37 @@ typedef struct um_vec_h {
 #define UmVSize1(V) sizeof(UmVItem(V))
 #define UmVData(V, H) ((UmVType1(V) *)((H) + 1))
 #define UmVHead(V) (((um_vec_h *)(V)) - 1)
+#define UmVFor(a, b, c, d, e, f, g, X, ...) _um_vec_for##X
+#define UmVForR(a, b, c, d, e, f, g, X, ...) _um_vec_for_range##X
 
 #define um_vec_alloc(V) (__typeof__(V))_um_vec_alloc(UM_VEC_CACHE_LINE, 0)
 #define um_vec_alloc_manual(V, N)                                              \
 	(__typeof__(V))_um_vec_alloc((N)*UmVSize1(V), 0)
 #define um_vec(T) T ***
 #define um_vec_len(V) _um_vec_len(UmVHead(V))
-#define um_vec_for(V, NAME)                                                    \
-	_um_vec_for(V, NAME, UmGen(_h), UmGen(_o), UmGen(_i), UmGen(_c))
-#define um_vec_for_i(V, NAME, INDEX)                                           \
-	_um_vec_for(V, NAME, UmGen(_h), UmGen(_o), (INDEX), UmGen(_c))
-#define um_vec_for_range(V, NAME, START, END)                                  \
-	_um_vec_for_range(V, NAME, UmGen(_h), UmGen(_o), UmGen(_i), UmGen(_c), \
-			  UmGen(_f), UmGen(_s), (START), UmGen(_e), (END))
-#define um_vec_for_range_i(V, NAME, START, END, INDEX)                         \
-	_um_vec_for_range(V, NAME, UmGen(_h), UmGen(_o), (INDEX), UmGen(_c),   \
-			  UmGen(_f), UmGen(_s), (START), UmGen(_e), (END))
+#define um_vec_for(...)                                                        \
+	UmVFor(__VA_ARGS__, H, H, H, H, _i, _d, L, L)(__VA_ARGS__)
+#define um_vec_for_range(...)                                                  \
+	UmVForR(__VA_ARGS__, H, H, _i, _d, L, L, L, L)(__VA_ARGS__)
 #define um_vec_get(V, N) (*um_vec_at(V, N))
 #define um_vec_at(V, N) (UmVType1(V) *)_um_vec_at(UmVHead(V), UmVSize1(V), (N))
 #define um_vec_slice(V, START, END)                                            \
 	(__typeof__(V))_um_vec_slice(UmVHead(V), UmVSize1(V), START, END)
+
+#define _um_vec_forL(...) UmE("um_vec_for: not enough arguments")
+#define _um_vec_forH(...) UmE("um_vec_for: too many arguments")
+#define _um_vec_for_rangeL(...) UmE("um_vec_for_range: not enough arguments")
+#define _um_vec_for_rangeH(...) UmE("um_vec_for_range: too many arguments")
+#define _um_vec_for_d(V, NAME)                                                 \
+	_um_vec_for(V, NAME, UmGen(_h), UmGen(_o), UmGen(_i), UmGen(_c))
+#define _um_vec_for_i(V, NAME, INDEX)                                          \
+	_um_vec_for(V, NAME, UmGen(_h), UmGen(_o), (INDEX), UmGen(_c))
+#define _um_vec_for_range_d(V, NAME, START, END)                               \
+	_um_vec_for_range(V, NAME, UmGen(_h), UmGen(_o), UmGen(_i), UmGen(_c), \
+			  UmGen(_f), UmGen(_s), (START), UmGen(_e), (END))
+#define _um_vec_for_range_i(V, NAME, START, END, INDEX)                        \
+	_um_vec_for_range(V, NAME, UmGen(_h), UmGen(_o), (INDEX), UmGen(_c),   \
+			  UmGen(_f), UmGen(_s), (START), UmGen(_e), (END))
 
 #define um_vec_push(V, ITEM)                                                   \
 	do {                                                                   \
@@ -75,7 +86,8 @@ typedef struct um_vec_h {
 				     (C) < (F);                                \
 				     (C)++, (I)++, (N) = UmVData(V, H) + (C))
 
-static inline um_vec_h* UmVRewind(um_vec_h *head, int *start, int *end) {
+static inline um_vec_h *UmVRewind(um_vec_h *head, int *start, int *end)
+{
 	while (*start > head->count) {
 		*start -= head->count;
 		*end -= head->count;

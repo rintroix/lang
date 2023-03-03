@@ -6,7 +6,7 @@ for arg; do
 	case "$arg" in
 		c|clean) for x in build; do rm -rf "$x"; echo - "$x"; done;; 
 		d|debug) "$0"; gdb ./build/app;;
-		r|run)   "$0"; ./build/app < test.r;;
+		r|run)   "$0"; ./build/app < ex.r;;
 		*) echo >&2 WAT: "$@"; exit 1;;
 	esac
 done
@@ -29,12 +29,15 @@ CP() { ok "$@" || { cp "$2" "$1"; echo + "$1"; } }
 
 mkdir -p build/
 
-LD build/packcc   external/packcc/src/packcc.c
-PG build/parser.c src/parser.peg
- 
 CFLAGS="$CFLAGS -Isrc -Ibuild"
 
-LD build/test src/test.c         &
+CC build/test.o   src/test.c     &
+LD build/packcc   external/packcc/src/packcc.c
+PG build/parser.c src/parser.peg
+
+wait
+
+LD build/test build/test.o       &
 CC build/main.o src/main.c       &
 CC build/parser.o build/parser.c
 

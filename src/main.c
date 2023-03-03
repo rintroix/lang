@@ -82,7 +82,7 @@ void print_ast(ast *a)
 	switch (a->type) {
 	case A_LIST: {
 		printf("(");
-		vfori(a->list.items, it, i) {
+		vfor(a->list.items, it, i) {
 			if (i != 0)
 				printf(" ");
 			printl_ast(it);
@@ -96,7 +96,7 @@ void print_ast(ast *a)
 
 	case A_CALL: {
 		printf("%s(", a->call.name);
-		vfori(a->call.args, arg, i)
+		vfor(a->call.args, arg, i)
 		{
 			if (i != 0)
 				printf(" ");
@@ -319,7 +319,7 @@ ast* operate(vec(macro) macros, vec(ast) list, size_t start)
 {
 	// TODO better find
 	size_t pos = vlen(list);
-	vforri(list, it, start, vlen(list), index) {
+	vforr(list, it, start, vlen(list), index) {
 		if (is(it, O(0))) {
 			pos = index;
 			break;
@@ -351,7 +351,7 @@ ast* operate(vec(macro) macros, vec(ast) list, size_t start)
 
 int _match(vec(ast) list, ast **patterns, size_t n)
 {
-	vfori(list, it, index)
+	vfor(list, it, index)
 	{
 		if (index == n)
 			return 1;
@@ -460,7 +460,7 @@ int compatible(vec(define) args, vec(rule) rules) {
 	if (vlen(args) != vlen(rules))
 		return 0;
 
-	vfori(args, arg, i) {
+	vfor(args, arg, i) {
 		if (!satisfies(vat(rules, i), arg))
 			return 0;
 	}

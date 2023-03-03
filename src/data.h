@@ -9,10 +9,8 @@
 #define vlen(V) (um_vec_len(V))
 #define vat(V, N) (um_vec_at(V, N))
 #define vget(V, N) (*vat(V, N))
-#define vfor(V, N) um_vec_for(V, N)
-#define vfori(V, N, I) um_vec_for_i(V, N, I)
-#define vforr(V, N, S, E) um_vec_for_range(V, N, S, E)
-#define vforri(V, N, S, E, I) um_vec_for_range_i(V, N, S, E, I)
+#define vfor(...) um_vec_for(__VA_ARGS__)
+#define vforr(...) um_vec_for_range(__VA_ARGS__)
 #define vslice(V, START, END) (um_vec_slice(V, START, END))
 
 #endif // DATA_H
