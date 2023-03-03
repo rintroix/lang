@@ -4,7 +4,7 @@ CFLAGS='-g -O0 -D__tb_debug__ -DDEBUG -pipe -fno-omit-frame-pointer'
 
 for arg; do
 	case "$arg" in
-		clean)   rm -vrf build/;; 
+		c|clean) for x in build; do rm -rf "$x"; echo - "$x"; done;; 
 		d|debug) "$0"; gdb ./build/app;;
 		r|run)   "$0"; ./build/app < test.r;;
 		*) echo >&2 WAT: "$@"; exit 1;;
@@ -13,27 +13,35 @@ done
 
 [ $# -eq 0 ] || exit 0
 
+trace() { echo >&2 "$@"; "$@"; }
+mark() { touch -m -t 0001010000 "$1"; }
+deps() { shift; ${CPP:-cpp} ${CFLAGS} -MM -MG "$@" | tr -d '\n\\'; }
+dk() { ok "$@" $(deps "$@"); }
 ok() {
-	[ -f "$1" ] || return 1
-	for d; do [ "$1" -ef "$d" -o "$1" -nt "$d" ] || return 1; done;
+	[ -f "$1" ] || { mark "$1"; return 1; }
+	for d; do [ ! -f "$d" -o "$1" -ef "$d" -o "$1" -nt "$d" ] || { mark "$1"; return 1; }; done;
 }
 
-OB() { ok "$@" || { ${CC:-cc} ${CFLAGS:-} -c -o "$1" "$2"; echo c "$1"; } }
-CC() { ok "$@" || { ${CC:-cc} ${CFLAGS:-} ${LDFLAGS:-} -o "$@"; echo c "$1"; } }
+CC() { dk "$@" || { ${CC:-cc} ${CFLAGS:-} -c -o "$@"; echo c "$1"; } }
+LD() { ok "$@" || { ${CC:-cc} ${CFLAGS:-} ${LDFLAGS:-} -o "$@"; echo l "$1"; } }
 PG() { ok "$@" || ( cd build/; ./packcc -o parser ../"$2"; echo g "$1"; ) }
-CP() { ok "$@" || { cp "$2" "$1"; echo - "$1"; } }
+CP() { ok "$@" || { cp "$2" "$1"; echo + "$1"; } }
 
 mkdir -p build/
 
-CC build/packcc   external/packcc/src/packcc.c
+LD build/packcc   external/packcc/src/packcc.c
 PG build/parser.c src/parser.peg
-
+ 
 CFLAGS="$CFLAGS -Isrc -Ibuild"
 
-OB build/main.o src/main.c src/*.h
-OB build/parser.o build/parser.c
+LD build/test src/test.c         &
+CC build/main.o src/main.c       &
+CC build/parser.o build/parser.c
 
-LDFLAGS="-lm"
+wait
 
-CC build/app build/main.o build/parser.o 
+./build/test >/dev/null || ./build/test
+
+LD build/app build/main.o build/parser.o 
+
 
