@@ -503,7 +503,9 @@ void rulify(scope *s, ast *a, vec(rule) rules) {
 		log("block");
 		if (0 != vlen(a->block.defs))
 			todo;
-		todo;
+		forv(a->block.items, item) {
+			rulify(s, item, rules);		
+		}
 		break;
 
 	case A_MARK:
