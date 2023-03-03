@@ -4,7 +4,7 @@
 /* A test runs various assertions, then calls PASS(), FAIL(), or SKIP(). */
 TEST vecs(void)
 {
-	um_vec(int) v = um_vec_alloc_manual(v, 2);
+	um_vec(int) v = um_vec_alloc_manual(int, 2);
 
 	um_vec_h *head = UmVHead(v);
 

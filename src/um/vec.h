@@ -7,8 +7,8 @@
 
 #include "um/common.h"
 
-#ifndef UM_VEC_CACHE_LINE
-#define UM_VEC_CACHE_LINE 128
+#ifndef UM_VEC_BUCKET_SIZE
+#define UM_VEC_BUCKET_SIZE 128
 #endif
 
 typedef struct um_vec_h {
@@ -25,9 +25,9 @@ typedef struct um_vec_h {
 #define UmVFor(a, b, c, d, e, f, g, X, ...) _um_vec_for##X
 #define UmVForR(a, b, c, d, e, f, g, X, ...) _um_vec_for_range##X
 
-#define um_vec_alloc(V) (__typeof__(V))_um_vec_alloc(UM_VEC_CACHE_LINE, 0)
-#define um_vec_alloc_manual(V, N)                                              \
-	(__typeof__(V))_um_vec_alloc((N)*UmVSize1(V), 0)
+#define um_vec_alloc(T) (um_vec(T))_um_vec_alloc(UM_VEC_BUCKET_SIZE, 0)
+#define um_vec_alloc_manual(T, N)                                              \
+	(um_vec(T))_um_vec_alloc((N)*sizeof(T), 0)
 #define um_vec(T) T ***
 #define um_vec_len(V) _um_vec_len(UmVHead(V))
 #define um_vec_for(...)                                                        \

@@ -69,7 +69,7 @@ int is(ast *a, ast *pat)
 
 int has(vec(ast) list, ast *pattern)
 {
-	vfor(list, it)
+	forv(list, it)
 	{
 		if (is(it, pattern))
 			return 1;
@@ -82,7 +82,7 @@ void print_ast(ast *a)
 	switch (a->type) {
 	case A_LIST: {
 		printf("(");
-		vfor(a->list.items, it, i) {
+		forv(a->list.items, it, i) {
 			if (i != 0)
 				printf(" ");
 			printl_ast(it);
@@ -96,7 +96,7 @@ void print_ast(ast *a)
 
 	case A_CALL: {
 		printf("%s(", a->call.name);
-		vfor(a->call.args, arg, i)
+		forv(a->call.args, arg, i)
 		{
 			if (i != 0)
 				printf(" ");
@@ -134,13 +134,13 @@ void printl_ast(ast *a)
 
 ast list0()
 {
-	vec(ast) items = avec(items);
+	vec(ast) items = avec(ast);
 	return list(items);
 }
 
 ast list1(ast a)
 {
-	vec(ast) items = avec(items);
+	vec(ast) items = avec(ast);
 	push(items, a);
 	return list(items);
 }
@@ -269,10 +269,10 @@ void destroy_ast(ast *a)
 
 vec(define) funargs(vec(ast) list)
 {
-	vec(define) out = avec(out);
+	vec(define) out = avec(define);
 
 	define *last = 0;
-	vfor(list, it)
+	forv(list, it)
 	{
 		if (it->type != A_ID)
 			error("fun arg not an identifier");
@@ -319,7 +319,7 @@ ast* operate(vec(macro) macros, vec(ast) list, size_t start)
 {
 	// TODO better find
 	size_t pos = vlen(list);
-	vforr(list, it, start, vlen(list), index) {
+	forvr(list, it, start, vlen(list), index) {
 		if (is(it, O(0))) {
 			pos = index;
 			break;
@@ -351,7 +351,7 @@ ast* operate(vec(macro) macros, vec(ast) list, size_t start)
 
 int _match(vec(ast) list, ast **patterns, size_t n)
 {
-	vfor(list, it, index)
+	forv(list, it, index)
 	{
 		if (index == n)
 			return 1;
@@ -372,16 +372,16 @@ block transform_block(vec(macro) macros, vec(ast) iter, size_t start,
 {
 	check(end >= start);
 
-	vec(ast) items = avec(items);
+	vec(define) defs = avec(define);
+	vec(ast) items = avec(ast);
 
-	vfor(iter, it)
+	forv(iter, it)
 	{
 		ast *b = transform(macros, it);
 		push(items, *b);
 	}
 
-	// TODO block needs defs?
-	return (struct block){.defs = 0, .items = items};
+	return (block){.defs = defs, .items = items};
 }
 
 ast *transform(vec(macro) macros, ast *a)
@@ -410,7 +410,7 @@ scope *newscope1(ast *f, scope *next)
 {
 	assert(f->type == A_FN);
 	scope *out = malloc(sizeof(scope));
-	vec(ast) functions = avec(functions);
+	vec(ast) functions = avec(ast);
 	push(functions, *f);
 	*out = (scope){.functions = functions, .next = next};
 	return out;
@@ -419,9 +419,9 @@ scope *newscope1(ast *f, scope *next)
 scope *newscope(vec(ast) asts, scope *next)
 {
 	scope *out = malloc(sizeof(scope));
-	vec(ast) functions = avec(functions);
+	vec(ast) functions = avec(ast);
 
-	vfor(asts, it)
+	forv(asts, it)
 	{
 		switch(it->type) {
 		case A_FN:
@@ -460,7 +460,7 @@ int compatible(vec(define) args, vec(rule) rules) {
 	if (vlen(args) != vlen(rules))
 		return 0;
 
-	vfor(args, arg, i) {
+	forv(args, arg, i) {
 		if (!satisfies(vat(rules, i), arg))
 			return 0;
 	}
@@ -476,6 +476,7 @@ void rulify(scope *s, ast *a, vec(rule) rules) {
 
 	case A_FN: {
 		define d = a->fn.def;
+		log("fn %s", d.name);
 		assert(d.init);
 		scope *fs = newscope1(a, s);
 		rulify(fs, d.init, rules);
@@ -499,6 +500,9 @@ void rulify(scope *s, ast *a, vec(rule) rules) {
 		break;
 
 	case A_BLOCK:
+		log("block");
+		if (0 != vlen(a->block.defs))
+			todo;
 		todo;
 		break;
 
@@ -518,9 +522,9 @@ int infer(scope *s, candidate* c) {
 vec(candidate)
     find_candidates(scope *scope, char *name, vec(rule) arg_rules)
 {
-	vec(candidate) candidates = avec(candidates);
+	vec(candidate) candidates = avec(candidate);
 
-	vfor(scope->functions, it)
+	forv(scope->functions, it)
 	{
 		if (it->type != A_FN)
 			bug("%s: not fun", __func__);
@@ -529,7 +533,7 @@ vec(candidate)
 			continue;
 
 		if (compatible(it->fn.args, arg_rules)) {
-			vec(rule) rules = avec(rules);
+			vec(rule) rules = avec(rule);
 
 			candidate c = can(it, rules);
 			if (infer(scope, &c))
@@ -575,8 +579,8 @@ void compile(request *r) {
 
 int main()
 {
-	vec(ast) topast = avec(topast);
-	vec(macro) macros = avec(macros);
+	vec(ast) topast = avec(ast);
+	vec(macro) macros = avec(macro);
 
 	ast a;
 	pcc_context_t *ctx = pcc_create(0);
@@ -589,13 +593,13 @@ int main()
 	if (a.type != 0) 
 		bug("%s: parser top level return", __func__);
 
-	vfor(topast, it) {
+	forv(topast, it) {
 		*it = *transform(macros, it);
 	}
 
 
 	scope *top = newscope(topast, 0);
-	vec(rule) main_rules = avec(main_rules);
+	vec(rule) main_rules = avec(rule);
 	request *mainreq = newreq(top, "main", main_rules);
 	compile(mainreq);
 

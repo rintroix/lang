@@ -1,8 +1,6 @@
 #ifndef COMMON_H_
 #define COMMON_H_
 
-#include <stdlib.h>
-
 #include "data.h"
 
 #define log(...) _log(__VA_ARGS__, "\n")

@@ -1,5 +1,4 @@
 compile_commands.json
-.xmake/
 .cache/
 build/
 external/
