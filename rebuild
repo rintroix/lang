@@ -1,52 +1,68 @@
 #!/bin/sh -eu
 
-CFLAGS='-g -O0 -D__tb_debug__ -DDEBUG -pipe -fno-omit-frame-pointer'
+# trap _cleanup EXIT
+# _cleanup() { [ -d "${_tmp:-}" ] && rm -rf "$_tmp"; }
 
-for arg; do
-	case "$arg" in
-		c|clean) for x in build; do rm -rf "$x"; echo - "$x"; done;; 
-		d|debug) "$0"; gdb ./build/app;;
-		r|run)   "$0"; ./build/app < ex.r;;
-		t|tools) bear -- "$0" c b;; 
-		b|build) "$0";;
-		*) echo >&2 WAT: "$@"; exit 1;;
-	esac
-done
+# _dir="${XDG_RUNTIME_DIR:-${TMP:-/tmp}}"
+# _tmp="$(mktemp -d "${_dir}/${0##*/}.XXXXXX" 2>/dev/null || true)"
 
-[ $# -eq 0 ] || exit 0
+# if [ -d "${_tmp:-}" ]; then
+# 	exec 3>"$_tmp/log"
+# else
+# 	exec 3>/dev/null
+# fi
 
-trace() { echo >&2 "$@"; "$@"; }
-mark() { touch -m -t 0001010000 "$1"; }
-deps() { shift; ${CPP:-cpp} ${CFLAGS} -MM -MG "$@" | tr -d '\n\\'; }
-dk() { ok "$@" $(deps "$@"); }
-ok() {
-	[ -f "$1" ] || { mark "$1"; return 1; }
-	for d; do [ ! -f "$d" -o "$1" -ef "$d" -o "$1" -nt "$d" ] || { mark "$1"; return 1; }; done;
+alias Q='>/dev/null'
+
+_err() { local c="$1"; shift; echo >&2 "${0##*/}: $*"; exit "$c"; }
+
+MARK() { touch -m -t 0001010000 "$1"; }
+# MARK() { rm -fv "$1"; }
+
+_cdeps() { 
+	shift # target
+ 	for d in $(${CPP:-cpp} ${CFLAGS:-} -MM -MG "$@" | tr -d '\n\\'); do
+		[ -e "$d" ] && echo "$d"
+	done
 }
 
-CC() { dk "$@" || { ${CC:-cc} ${CFLAGS:-} -c -o "$@"; echo c "$1"; } }
-LD() { ok "$@" || { ${CC:-cc} ${CFLAGS:-} ${LDFLAGS:-} -o "$@"; echo l "$1"; } }
-PG() { ok "$@" || ( cd build/; ./packcc -o parser ../"$2"; echo g "$1"; ) }
-CP() { ok "$@" || { cp "$2" "$1"; echo + "$1"; } }
+_yargs() {
+	while read x; do set -- "$@" "$x"; done
+	"$@"
+}
 
-mkdir -p build/
+RUN() {
+	local msg="$1"; shift
+	if Q "$@"; then echo "$msg"; else _err $? "$*"; fi
+}
 
-CFLAGS="$CFLAGS -Isrc -Ibuild"
+OK() {
+	local t="$1"; shift
+	[ -e "$t" ] || { MARK "$t"; return 1; }
+	for d; do
+		# [ -e "$d" ] || _err 2 "not found: $d" # TODO
+		[ ! -e "$d" -o "$t" -ef "$d" -o "$t" -nt "$d" ] || { MARK "$t"; return 1; }
+	done
+}
 
-CC build/test.o   src/test.c     &
-LD build/packcc   external/packcc/src/packcc.c
-PG build/parser.c src/parser.peg
+CK() { _cdeps "$@" | _yargs OK "$@"; }
 
-wait
+_cc() { RUN "c $1" ${CC:-cc} ${CFLAGS:-} -c -o "$@"; }
+_ld() { RUN "l $1" ${CC:-cc} ${CFLAGS:-} ${LDFLAGS:-} -o "$@"; }
 
-LD build/test build/test.o       &
-CC build/main.o src/main.c       &
-CC build/parser.o build/parser.c
+LD() { OK "$@"      || _ld "$@"; }
+CC() { CK "$@"      || _cc "$@"; }
+CP() { OK "$2" "$1" || { RUN "+ $2" cp "$1" "$2"; } }
 
-wait
+/bin/sh -n ./buildfile
+. ./buildfile
 
-./build/test >/dev/null || ./build/test
+Q command -v clean || clean() { RUN '- build/' rm -rf build/; } 
 
-LD build/app build/main.o build/parser.o 
+[ $# -ne 0 ] || set -- build
 
+for arg; do
+	Q command -v "$arg" || _err 8 "no such target: $arg"
+	eval "$arg"
+done
 
