@@ -19,7 +19,7 @@
 #define check(...)                                                             \
 	do {                                                                   \
 		if (!(__VA_ARGS__))                                            \
-			_elog(1, "check failed: %s", #__VA_ARGS__);            \
+			_elog(1, "i checked, no good: %s", #__VA_ARGS__);      \
 	} while (0)
 
 #ifdef DEBUG

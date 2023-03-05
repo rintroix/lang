@@ -19,33 +19,29 @@ _err() { local c="$1"; shift; echo >&2 "${0##*/}: $*"; exit "$c"; }
 MARK() { touch -m -t 0001010000 "$1"; }
 # MARK() { rm -fv "$1"; }
 
-_cdeps() { 
-	shift # target
- 	for d in $(${CPP:-cpp} ${CFLAGS:-} -MM -MG "$@" | tr -d '\n\\'); do
-		[ -e "$d" ] && echo "$d"
-	done
+CK() { 
+	local target="$1"; shift
+	OK "$target" "$@" $(${CPP:-cpp} ${CFLAGS:-} -MM -MG "$@")
 }
 
-_yargs() {
-	while read x; do set -- "$@" "$x"; done
-	"$@"
-}
+# _yargs() {
+# 	while read x; do set -- "$@" "$x"; done
+# 	"$@"
+# }
 
 RUN() {
 	local msg="$1"; shift
 	if Q "$@"; then echo "$msg"; else _err $? "$*"; fi
+	# better 2>null and in case of error repeat command again to show it
 }
 
 OK() {
 	local t="$1"; shift
-	[ -e "$t" ] || { MARK "$t"; return 1; }
+	[ -e "$t" ] || return 1
 	for d; do
-		# [ -e "$d" ] || _err 2 "not found: $d" # TODO
 		[ ! -e "$d" -o "$t" -ef "$d" -o "$t" -nt "$d" ] || { MARK "$t"; return 1; }
 	done
 }
-
-CK() { _cdeps "$@" | _yargs OK "$@"; }
 
 _cc() { RUN "c $1" ${CC:-cc} ${CFLAGS:-} -c -o "$@"; }
 _ld() { RUN "l $1" ${CC:-cc} ${CFLAGS:-} ${LDFLAGS:-} -o "$@"; }
@@ -59,7 +55,7 @@ CP() { OK "$2" "$1" || { RUN "+ $2" cp "$1" "$2"; } }
 
 Q command -v clean || clean() { RUN '- build/' rm -rf build/; } 
 
-[ $# -ne 0 ] || set -- build
+[ $# -gt 0 ] || set -- build
 
 for arg; do
 	Q command -v "$arg" || _err 8 "no such target: $arg"
