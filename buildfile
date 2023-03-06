@@ -23,13 +23,10 @@ build() {
 
 	LD test build/test.o
 
-	# DO test >/dev/null || DO test
+	DO test >/dev/null || DO test
 
-	wait
 	CC src/main.c
-	wait
 	LD app build/parser.o build/main.o 
-	wait
 }
 
 

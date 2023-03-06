@@ -1,13 +1,16 @@
 #!/bin/sh -eu
 
 trap _cleanup EXIT
-_cleanup() { [ -d "${T:-}" ] && ls $T && rm -rf "$T"; echo I CLEAN GOOD YOU PAY $T; }
+_cleanup() { [ -d "${T:-}" ] && rm -rf "$T"; echo I CLEAN GOOD YOU PAY $T; }
 _err() { local c="$1"; shift; echo >&2 "${0##*/}: $*"; exit "$c"; }
 
 _dir="${XDG_RUNTIME_DIR:-${TMP:-/tmp}}"
 T="$(mktemp -d "${_dir}/${0##*/}.XXXXXX" 2>/dev/null || true)"
+_pipe="$T/pipe"
 
-[ -d "${T:-}" ] || _err 1 "temp dir no exist"
+[ -d "${T:-}" ] || _err 1 "temp no exist"
+
+mkfifo "$T/pipe" || _err 1 "pipe no exist"
 
 # TODO build dir parametric
 # TODO build dir in tmp in mem outside project
@@ -21,24 +24,11 @@ alias Q='>/dev/null'
 MARK() { touch -m -t 0001010000 "$1"; }
 # MARK() { rm -fv "$1"; }
 
-CK() { 
-	local t="$1"; shift
-	local c="$1"; shift
-
-	[ $# -eq 0 ] || _err 100 TODO 1
-
-	echo CK $c for $t
-
-	exec 9< "$c"; flock -n 9 || echo LOCK CK $c failed
-	echo LOCK CK "$c"
-
-	OK "$t" "$c"
-}
-
 DO() {
-	local cmd="build/$1"
+	local cmd="build/$1"; shift
 	[ -f "$cmd" ] || _err 1 "command no exist: $1"
 	[ -x "$cmd" ] || _err 1 "command no exec: $1"
+	"$cmd" "$@"
 }
 
 # _yargs() {
@@ -47,7 +37,6 @@ DO() {
 # }
 
 RUN() {
-	echo >&2 RUN "$@"
 	local msg="$1"; shift
 	if Q "$@"; then echo "$msg"; else _err $? "$*"; fi
 	# better 2>null and in case of error repeat command again to show it
@@ -62,62 +51,91 @@ FIND() {
 }
 
 OK() {
-	local t="$1"; shift
-	local d;
+	local t="$1" code=0 d; shift
 	for d; do
-		[ "$t" -ef "$d" ] && continue
+ 		[ "$t" -ef "$d" ] && continue
 
-		echo CHECK $d for $t
- 		flock -s -n "$d" -c true || echo WAIT ON $d for $t
+		# echo CHECK $d for $t # delme
+ 		# flock -s -n "$d" -c true || echo WAIT ON $d for $t # delme
 		flock -s "$d" -c true
-		echo ACCESS $d for $t
+		# echo ACCESS $d for $t # delme
   				
-		[ "$d" -nt "$t" ] && return 1
+		[ "$d" -nt "$t" ] && code=1
+	done
+
+	return $code
+}
+
+LOCK() {
+	: ${_fd:=3}
+	for t; do
+		if [ -e "$t" ]; then
+			eval "exec $_fd< '$t'"
+		else
+			eval "exec $_fd> '$t'"
+			MARK "$t"
+		fi
+		flock -n $_fd
+ 		# echo LOCK "$t" # delme
+		_fd=$((_fd+1))
+	done
+	echo good >> $_pipe
+}
+
+RLOCK() {
+	: ${_fd:=3}
+	: ${_rfd:=$_fd}
+	for t; do
+		[ -e "$t" ] || _err 5 "RLOCK: no exist: $t"
+		eval "exec $_fd< '$t'"
+		flock -s $_fd
+ 		# echo RLOCK "$t" # delme
+		_fd=$((_fd+1))
+	done
+}
+
+RUNLOCK() {
+	local _xrfd=$_rfd
+	for t; do
+		flock -u $_xrfd
+ 		# echo RUNLOCK "$t" # delme
+		_xrfd=$((_xrfd+1))
 	done
 }
 
 _cc() { RUN "c $1" ${CC:-cc} ${CFLAGS:-} -c -o "$@"; }
 _ld() { RUN "l $1" ${CC:-cc} ${CFLAGS:-} ${LDFLAGS:-} -o "$@"; }
 
-_pfx() {
-	local s="$(echo "$1" | md5sum)"
-	echo "$T/${s%% *}"
-}
-
 LD() {
 	local t="build/$1"; shift
 	(
-		exec 4> "$t"; flock -n 4; MARK "$t";
-	    echo LOCK "$t"
-		{ OK "$t" "$@" || _ld "$t" "$@"; } &
-	)
+		LOCK "$t"
+		OK "$t" "$@" || _ld "$t" "$@"
+	) &
+	read < $_pipe
 }
 
 CC() {
-	local h o n c;
+	local h o n c b;
 	for f; do
 		c="$(FIND "$f")"
 		n="${c##*/}"
+		b="${n%.c}.o"
 	    o="build/${n%.c}.o"
-
-		echo CC c=$c n=$n o=$o
-
 		(
-			exec 5< "$c"; flock 5
-			echo LOCK "$c" for deps check
+			LOCK "$o"
+			RLOCK "$c"
 
+			set --
 			for h in $(${CPP:-cpp} ${CFLAGS:-} -MM -MG "$c"); do
-				[ -e "$h" -a "$h" -nt "$c" ] && touch -r "$h" "$c"
+				case "$h" in (\\|"$b:") continue;; esac
+				set -- "$@" "$h"
 			done
 
-			flock -u 5
-			echo UNLOCK "$c"
-
-			exec 4> "$o"; flock -n 4; MARK "$o";
-			echo LOCK "$o"
-
-			{ OK "$o" "$c" || _cc "$o" "$c"; echo UNLOCK $o; } &
-		)
+			RUNLOCK "$c"
+			OK "$o" "$c" "$@" || _cc "$o" "$c"
+		) &
+		read < $_pipe
 	done
 }
 
@@ -128,21 +146,16 @@ PG() {
 	local b="${p##*/}"
 	local c="build/${b%.peg}.c" h="build/${b%.peg}.h"
 	(
-		exec 4> "$c"; flock -n 4; MARK "$c"
-		exec 5> "$h"; flock -n 5; MARK "$h"
+		LOCK "$c" "$h"
 
-		echo LOCK "$c" "$h"
-
-		flock -s -n build/packcc -c true || echo WAIT build/packcc
+		# flock -s -n build/packcc -c true || echo WAIT build/packcc # delme
 		flock -s build/packcc -c true
-		echo ACCESS build/packcc
+		# echo ACCESS build/packcc # delme
 
-		{ 	
-			OK "$c" "$p" || { echo YAYAYAYA; cd build/; ./packcc -o "${b%.peg}" ../"$p"; echo p "$p"; }
-		} &
-	)
+		OK "$c" "$p" || { cd build/; ./packcc -o "${b%.peg}" ../"$p"; echo p "$p"; }
+	) &
+	read < $_pipe
 }
-
 
 /bin/sh -n ./buildfile
 . ./buildfile
