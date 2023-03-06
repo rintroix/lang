@@ -1,16 +1,13 @@
 #!/bin/sh -eu
 
-# trap _cleanup EXIT
-# _cleanup() { [ -d "${_tmp:-}" ] && rm -rf "$_tmp"; }
+trap _cleanup EXIT
+_cleanup() { [ -d "${T:-}" ] && ls $T && rm -rf "$T"; echo I CLEAN GOOD YOU PAY $T; }
+_err() { local c="$1"; shift; echo >&2 "${0##*/}: $*"; exit "$c"; }
 
-# _dir="${XDG_RUNTIME_DIR:-${TMP:-/tmp}}"
-# _tmp="$(mktemp -d "${_dir}/${0##*/}.XXXXXX" 2>/dev/null || true)"
+_dir="${XDG_RUNTIME_DIR:-${TMP:-/tmp}}"
+T="$(mktemp -d "${_dir}/${0##*/}.XXXXXX" 2>/dev/null || true)"
 
-# if [ -d "${_tmp:-}" ]; then
-# 	exec 3>"$_tmp/log"
-# else
-# 	exec 3>/dev/null
-# fi
+[ -d "${T:-}" ] || _err 1 "temp dir no exist"
 
 # TODO build dir parametric
 # TODO build dir in tmp in mem outside project
@@ -21,16 +18,27 @@
 
 alias Q='>/dev/null'
 
-_err() { local c="$1"; shift; echo >&2 "${0##*/}: $*"; exit "$c"; }
-
 MARK() { touch -m -t 0001010000 "$1"; }
 # MARK() { rm -fv "$1"; }
 
 CK() { 
-	for d in $(${CPP:-cpp} ${CFLAGS:-} -MM -MG "$2"); do
-		[ -e "$d" -a "$d" -nt "$2" ] && touch -r "$d" "$2"
-	done
-	OK "$@"
+	local t="$1"; shift
+	local c="$1"; shift
+
+	[ $# -eq 0 ] || _err 100 TODO 1
+
+	echo CK $c for $t
+
+	exec 9< "$c"; flock -n 9 || echo LOCK CK $c failed
+	echo LOCK CK "$c"
+
+	OK "$t" "$c"
+}
+
+DO() {
+	local cmd="build/$1"
+	[ -f "$cmd" ] || _err 1 "command no exist: $1"
+	[ -x "$cmd" ] || _err 1 "command no exec: $1"
 }
 
 # _yargs() {
@@ -39,25 +47,102 @@ CK() {
 # }
 
 RUN() {
+	echo >&2 RUN "$@"
 	local msg="$1"; shift
 	if Q "$@"; then echo "$msg"; else _err $? "$*"; fi
 	# better 2>null and in case of error repeat command again to show it
+
+}
+
+FIND() {
+	if [ -e "$1" ]; then echo "$1"
+	elif [ -e "build/$1" ]; then echo "build/$1"	
+	else _err 1 "dep not found: $1"
+	fi
 }
 
 OK() {
 	local t="$1"; shift
-	[ -e "$t" ] || return 1
+	local d;
 	for d; do
-		[ ! -e "$d" -o "$t" -ef "$d" -o "$t" -nt "$d" ] || return 1
+		[ "$t" -ef "$d" ] && continue
+
+		echo CHECK $d for $t
+ 		flock -s -n "$d" -c true || echo WAIT ON $d for $t
+		flock -s "$d" -c true
+		echo ACCESS $d for $t
+  				
+		[ "$d" -nt "$t" ] && return 1
 	done
 }
 
 _cc() { RUN "c $1" ${CC:-cc} ${CFLAGS:-} -c -o "$@"; }
 _ld() { RUN "l $1" ${CC:-cc} ${CFLAGS:-} ${LDFLAGS:-} -o "$@"; }
 
-LD() { OK "$@"      || _ld "$@"; }
-CC() { CK "$@"      || _cc "$@"; }
+_pfx() {
+	local s="$(echo "$1" | md5sum)"
+	echo "$T/${s%% *}"
+}
+
+LD() {
+	local t="build/$1"; shift
+	(
+		exec 4> "$t"; flock -n 4; MARK "$t";
+	    echo LOCK "$t"
+		{ OK "$t" "$@" || _ld "$t" "$@"; } &
+	)
+}
+
+CC() {
+	local h o n c;
+	for f; do
+		c="$(FIND "$f")"
+		n="${c##*/}"
+	    o="build/${n%.c}.o"
+
+		echo CC c=$c n=$n o=$o
+
+		(
+			exec 5< "$c"; flock 5
+			echo LOCK "$c" for deps check
+
+			for h in $(${CPP:-cpp} ${CFLAGS:-} -MM -MG "$c"); do
+				[ -e "$h" -a "$h" -nt "$c" ] && touch -r "$h" "$c"
+			done
+
+			flock -u 5
+			echo UNLOCK "$c"
+
+			exec 4> "$o"; flock -n 4; MARK "$o";
+			echo LOCK "$o"
+
+			{ OK "$o" "$c" || _cc "$o" "$c"; echo UNLOCK $o; } &
+		)
+	done
+}
+
 CP() { OK "$2" "$1" || { RUN "+ $2" cp "$1" "$2"; } }
+
+PG() {
+	local p="$1"
+	local b="${p##*/}"
+	local c="build/${b%.peg}.c" h="build/${b%.peg}.h"
+	(
+		exec 4> "$c"; flock -n 4; MARK "$c"
+		exec 5> "$h"; flock -n 5; MARK "$h"
+
+		echo LOCK "$c" "$h"
+
+		flock -s -n build/packcc -c true || echo WAIT build/packcc
+		flock -s build/packcc -c true
+		echo ACCESS build/packcc
+
+		{ 	
+			OK "$c" "$p" || { echo YAYAYAYA; cd build/; ./packcc -o "${b%.peg}" ../"$p"; echo p "$p"; }
+		} &
+	)
+}
+
 
 /bin/sh -n ./buildfile
 . ./buildfile
@@ -69,5 +154,6 @@ Q command -v clean || clean() { RUN '- build/' rm -rf build/; }
 for arg; do
 	Q command -v "$arg" || _err 8 "no such target: $arg"
 	eval "$arg"
+	wait
 done
 

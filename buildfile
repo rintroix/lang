@@ -1,5 +1,3 @@
-PG() { OK "$@" || ( cd build/; ./packcc -o parser ../"$2"; echo g "$1"; ) }
-
 alias r=run
 alias b=build
 alias c=clean
@@ -17,16 +15,21 @@ build() {
 
 	mkdir -p build/
 
-	CC build/test.o   src/test.c
-	LD build/packcc   external/packcc/src/packcc.c
-	PG build/parser.c src/parser.peg
-	LD build/test     build/test.o
-	CC build/main.o   src/main.c
-	CC build/parser.o build/parser.c
+	LD packcc external/packcc/src/packcc.c
 
-	./build/test >/dev/null || ./build/test
+	CC src/test.c
+	PG src/parser.peg
+	CC parser.c
 
-	LD build/app build/main.o build/parser.o 
+	LD test build/test.o
+
+	# DO test >/dev/null || DO test
+
+	wait
+	CC src/main.c
+	wait
+	LD app build/parser.o build/main.o 
+	wait
 }
 
 
