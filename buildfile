@@ -17,26 +17,15 @@ build() {
 
 	LD packcc external/packcc/src/packcc.c
 
-	CC src/test.c
-	PG src/parser.peg
-	CC parser.c
+	RE src/parser.peg
+	RE src/main.c
+	RE src/test.c
+	RE parser.c
 
 	LD test build/test.o
 
 	DO test >/dev/null || DO test
 
-	CC src/main.c
 	LD app build/parser.o build/main.o 
 }
-
-
-	# case "$arg" in
-	# 	# c|clean) for x in build; do rm -rf "$x"; echo - "$x"; done;; 
-	# 	c|clean) clean;; 
-	# 	d|debug) "$0"; gdb ./build/app;;
-	# 	r|run)   "$0"; ./build/app < ex.r;;
-	# 	t|tools) bear -- "$0" c b;; 
-	# 	b|build) "$0";;
-	# 	*) echo >&2 WAT: "$@"; exit 1;;
-	# esac
 

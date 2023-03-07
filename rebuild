@@ -1,23 +1,29 @@
 #!/bin/sh -eu
 
+# PS4='+ $(date "+%s.%N")\011 '
+# exec 2>/tmp/bashstart.$$.log
+# set -x
+
+: ${P:=''}
+: ${D:=''}
+
 trap _cleanup EXIT
 _cleanup() { [ -d "${T:-}" ] && rm -rf "$T"; echo I CLEAN GOOD YOU PAY $T; }
 _err() { local c="$1"; shift; echo >&2 "${0##*/}: $*"; exit "$c"; }
 
 _dir="${XDG_RUNTIME_DIR:-${TMP:-/tmp}}"
 T="$(mktemp -d "${_dir}/${0##*/}.XXXXXX" 2>/dev/null || true)"
-_pipe="$T/pipe"
 
 [ -d "${T:-}" ] || _err 1 "temp no exist"
 
-mkfifo "$T/pipe" || _err 1 "pipe no exist"
+debug() { [ "$D" ] || return 0; echo >&2 "$@"; }
 
 # TODO build dir parametric
 # TODO build dir in tmp in mem outside project
 
 # CDPATH apparently causes unexpected 'cd' output on some platforms.
 # from redo/minimal
-#unset CDPATH
+unset CDPATH
 
 alias Q='>/dev/null'
 
@@ -26,21 +32,15 @@ MARK() { touch -m -t 0001010000 "$1"; }
 
 DO() {
 	local cmd="build/$1"; shift
-	[ -f "$cmd" ] || _err 1 "command no exist: $1"
-	[ -x "$cmd" ] || _err 1 "command no exec: $1"
+	WANT "$cmd"
+	[ -f "$cmd" ] || _err 1 "command no exist: $cmd"
+	[ -x "$cmd" ] || _err 1 "command no exec: $cmd"
 	"$cmd" "$@"
 }
 
-# _yargs() {
-# 	while read x; do set -- "$@" "$x"; done
-# 	"$@"
-# }
-
 RUN() {
-	local msg="$1"; shift
-	if Q "$@"; then echo "$msg"; else _err $? "$*"; fi
+	if Q "$@"; then :; else _err $? "$*"; fi
 	# better 2>null and in case of error repeat command again to show it
-
 }
 
 FIND() {
@@ -54,113 +54,127 @@ OK() {
 	local t="$1" code=0 d; shift
 	for d; do
  		[ "$t" -ef "$d" ] && continue
-
-		# echo CHECK $d for $t # delme
- 		# flock -s -n "$d" -c true || echo WAIT ON $d for $t # delme
-		flock -s "$d" -c true
-		# echo ACCESS $d for $t # delme
-  				
+		WANT "$d"
 		[ "$d" -nt "$t" ] && code=1
 	done
-
 	return $code
 }
 
-LOCK() {
-	: ${_fd:=3}
-	for t; do
-		if [ -e "$t" ]; then
-			eval "exec $_fd< '$t'"
-		else
-			eval "exec $_fd> '$t'"
-			MARK "$t"
-		fi
-		flock -n $_fd
- 		# echo LOCK "$t" # delme
-		_fd=$((_fd+1))
-	done
-	echo good >> $_pipe
+_lock() {
+	local fd="$1" f="$2"
+	if [ -e "$f" ]; then
+		eval "exec $fd< '$f'"
+		debug LOCK R "$f" on $fd
+	else
+		eval "exec $fd> '$f'"
+		debug LOCK W "$f" on $fd
+		MARK "$f"
+	fi
+	flock -n $fd || _err 8 "lock failed: $f" 
 }
 
-RLOCK() {
-	: ${_fd:=3}
-	: ${_rfd:=$_fd}
-	for t; do
-		[ -e "$t" ] || _err 5 "RLOCK: no exist: $t"
-		eval "exec $_fd< '$t'"
-		flock -s $_fd
- 		# echo RLOCK "$t" # delme
-		_fd=$((_fd+1))
-	done
+WANT() {
+	[ "$P" ] || return 0
+	debug WANT $1
+	exec 9< "$1" || _err 5 "WANT: no access: $1"
+	flock -s 9
+	exec 9<&-
+	debug ACCESS $1
 }
-
-RUNLOCK() {
-	local _xrfd=$_rfd
-	for t; do
-		flock -u $_xrfd
- 		# echo RUNLOCK "$t" # delme
-		_xrfd=$((_xrfd+1))
-	done
-}
-
-_cc() { RUN "c $1" ${CC:-cc} ${CFLAGS:-} -c -o "$@"; }
-_ld() { RUN "l $1" ${CC:-cc} ${CFLAGS:-} ${LDFLAGS:-} -o "$@"; }
 
 LD() {
 	local t="build/$1"; shift
-	(
-		LOCK "$t"
-		OK "$t" "$@" || _ld "$t" "$@"
-	) &
-	read < $_pipe
+	ls -al build/
+	OK "$t" "$@" && return
+	RRR1 "$t" $CC $CFLAGS $LDFLAGS -o "$t" "$@"
 }
 
-CC() {
+RE() {
+	local rule="_rule_${1##*.}"
+	Q command -v "$rule" || _err 8 "no rule for: $1"
+	"$rule" "$@"
+}
+
+_rule_c() {
 	local h o n c b;
-	for f; do
-		c="$(FIND "$f")"
-		n="${c##*/}"
-		b="${n%.c}.o"
-	    o="build/${n%.c}.o"
-		(
-			LOCK "$o"
-			RLOCK "$c"
+	c="$(FIND "$1")"
+	n="${c##*/}"
+	b="${n%.c}.o"
+    o="build/${n%.c}.o"
 
-			set --
-			for h in $(${CPP:-cpp} ${CFLAGS:-} -MM -MG "$c"); do
-				case "$h" in (\\|"$b:") continue;; esac
-				set -- "$@" "$h"
-			done
+	WANT "$c"
 
-			RUNLOCK "$c"
-			OK "$o" "$c" "$@" || _cc "$o" "$c"
-		) &
-		read < $_pipe
+	set --
+	for h in $($CPP $CFLAGS -MM -MG "$c"); do
+		case "$h" in
+			(\\|"$b:") continue;;
+		esac
+		set -- "$@" "$h"
 	done
+
+	OK "$o" "$c" "$@" && return
+	RRR1 "$o" $CC $CFLAGS -c -o "$o" "$c"
 }
 
-CP() { OK "$2" "$1" || { RUN "+ $2" cp "$1" "$2"; } }
-
-PG() {
-	local p="$1"
-	local b="${p##*/}"
+_rule_peg() {
+	local p="$1" b="${1##*/}"
 	local c="build/${b%.peg}.c" h="build/${b%.peg}.h"
-	(
-		LOCK "$c" "$h"
+	WANT build/packcc
 
-		# flock -s -n build/packcc -c true || echo WAIT build/packcc # delme
-		flock -s build/packcc -c true
-		# echo ACCESS build/packcc # delme
+	OK "$c" "$p" && return
+	RRRN "$c" "$h" % _peg "$p" "${b%.peg}"
+}
 
-		OK "$c" "$p" || { cd build/; ./packcc -o "${b%.peg}" ../"$p"; echo p "$p"; }
-	) &
-	read < $_pipe
+_peg() {
+	( cd build/; ./packcc -o "$2" ../"$1"; echo p "$1"; )
+}
+
+RRR1() {
+	local t="$1"; shift
+	RRRN "$t" % "$@"
+}
+
+RRRN() {
+	debug RRRN "$@"
+	local n=3
+	if [ "$P" ]; then
+		exec 9< "$0"; flock 9
+		( 
+			while [ "$1" != "%" ]; do
+				_lock $n "$1"
+				n=$((n + 1))
+				echo + "$1"
+				shift
+			done
+			shift # %
+
+			flock -u 9
+			"$@"
+			debug RRR DONE "$@"
+		) &
+		exec 8< "$0"; flock -s 8
+		exec 8<&- 9<&-
+		debug CARRY ON RRR "$@"
+	else
+		while [ "$1" != "%" ]; do
+			echo + "$1"
+			shift
+		done
+		shift # %
+		"$@"
+		debug RRR DONE "$@"
+	fi
 }
 
 /bin/sh -n ./buildfile
 . ./buildfile
 
-Q command -v clean || clean() { RUN '- build/' rm -rf build/; } 
+: ${CC:=cc}
+: ${CPP:=cpp}
+: ${CFLAGS:=}
+: ${LDFLAGS:=}
+
+Q command -v clean || clean() { rm -rf build/; echo '- build/'; } 
 
 [ $# -gt 0 ] || set -- build
 
