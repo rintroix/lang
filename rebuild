@@ -7,9 +7,13 @@
 : ${P:=''}
 : ${D:=''}
 
+TARGETS=""
+LASTLOCK=""
+PARENTPID="$$"
+
 trap _cleanup EXIT
 _cleanup() { [ -d "${T:-}" ] && rm -rf "$T"; echo I CLEAN GOOD YOU PAY $T; }
-_err() { local c="$1"; shift; echo >&2 "${0##*/}: $*"; exit "$c"; }
+_err() { local c="$1"; shift; echo >&2 "${0##*/}: $*"; kill -INT "-$PARENTPID"; }
 
 _dir="${XDG_RUNTIME_DIR:-${TMP:-/tmp}}"
 T="$(mktemp -d "${_dir}/${0##*/}.XXXXXX" 2>/dev/null || true)"
@@ -32,6 +36,7 @@ MARK() { touch -m -t 0001010000 "$1"; }
 
 DO() {
 	local cmd="build/$1"; shift
+	debug DO "$cmd" "$@"
 	WANT "$cmd"
 	[ -f "$cmd" ] || _err 1 "command no exist: $cmd"
 	[ -x "$cmd" ] || _err 1 "command no exec: $cmd"
@@ -52,47 +57,70 @@ FIND() {
 
 OK() {
 	local t="$1" code=0 d; shift
+	echo OK "$@"
+	[ -e "$t" ] || code=1
 	for d; do
- 		[ "$t" -ef "$d" ] && continue
+ 		[ "$t" -ef "$d" ] && _err 8 "same file in ok: $t vs $d"
 		WANT "$d"
-		[ "$d" -nt "$t" ] && code=1
+		[ $code -eq 0 -a "$d" -nt "$t" ] && code=1
 	done
+
 	return $code
 }
 
+LOCK() {
+	local f
+	LASTLOCK=""
+	for f; do
+		TARGETS="${TARGETS}${f}:"
+		LASTLOCK="${LASTLOCK}${f}:"
+	done
+}
+
 _lock() {
-	local fd="$1" f="$2"
-	if [ -e "$f" ]; then
-		eval "exec $fd< '$f'"
-		debug LOCK R "$f" on $fd
-	else
-		eval "exec $fd> '$f'"
-		debug LOCK W "$f" on $fd
-		MARK "$f"
-	fi
-	flock -n $fd || _err 8 "lock failed: $f" 
+	: ${fd:=3}
+	local fd=3 f IFS=:
+	for f in $LASTLOCK; do
+		mkdir -p "$T/$f"
+		eval "exec $fd< '$T/$f'"
+		flock -n $fd || _err 8 "lock failed: $f" 
+		debug LOCK "$f"
+		: $(( fd++ ))
+	done
 }
 
 WANT() {
 	[ "$P" ] || return 0
+	local IFS=:
 	debug WANT $1
-	exec 9< "$1" || _err 5 "WANT: no access: $1"
-	flock -s 9
-	exec 9<&-
+	for t in $TARGETS; do
+		[ "$t" = "$1" -a -e "$T/$1" ] || continue
+		exec 55< "$T/$1" || _err 5 "WANT: no access: $1"
+		debug WAIT $1
+		flock -s 55
+		exec 55<&-
+		break
+	done
 	debug ACCESS $1
 }
 
 LD() {
-	local t="build/$1"; shift
-	ls -al build/
-	OK "$t" "$@" && return
-	RRR1 "$t" $CC $CFLAGS $LDFLAGS -o "$t" "$@"
+	local t="$BUILD/$1"; shift
+	debug LD "$t" "$@"
+	LOCK "$t"
+	OK "$t" "$@" ||    
+		RRR $CC $CFLAGS $LDFLAGS -o "$t" "$@"
 }
 
 RE() {
 	local rule="_rule_${1##*.}"
 	Q command -v "$rule" || _err 8 "no rule for: $1"
 	"$rule" "$@"
+}
+
+_map() {
+	local cmd="$1"; shift
+	
 }
 
 _rule_c() {
@@ -102,66 +130,68 @@ _rule_c() {
 	b="${n%.c}.o"
     o="build/${n%.c}.o"
 
+	LOCK "$o" 
 	WANT "$c"
 
 	set --
 	for h in $($CPP $CFLAGS -MM -MG "$c"); do
 		case "$h" in
-			(\\|"$b:") continue;;
+			(\\|"$b:"|"$c") continue;;
 		esac
 		set -- "$@" "$h"
 	done
 
-	OK "$o" "$c" "$@" && return
-	RRR1 "$o" $CC $CFLAGS -c -o "$o" "$c"
+	OK "$o" "$c" "$@" ||
+		RRR $CC $CFLAGS -c -o "$o" "$c"
 }
 
 _rule_peg() {
 	local p="$1" b="${1##*/}"
 	local c="build/${b%.peg}.c" h="build/${b%.peg}.h"
+
+	LOCK "$c" "$h"
 	WANT build/packcc
 
-	OK "$c" "$p" && return
-	RRRN "$c" "$h" % _peg "$p" "${b%.peg}"
+	OK "$c" "$p" ||
+		RRR _peg "$p" "${b%.peg}"
 }
 
 _peg() {
-	( cd build/; ./packcc -o "$2" ../"$1"; echo p "$1"; )
+	(
+		cd build/
+		./packcc -o "$2" ../"$1" || _err 8 "packcc"
+	)
 }
 
-RRR1() {
-	local t="$1"; shift
-	RRRN "$t" % "$@"
+ARM() {
+	exec 9< "$0"
+	flock 9
 }
 
-RRRN() {
-	debug RRRN "$@"
-	local n=3
+UNARM() {
+	flock -u 9
+}
+
+WAIT() {
+	exec 8< "$0"
+	flock -s 8
+	exec 8<&- 9<&-
+}
+
+RRR() {
+	debug RRR "$@"
 	if [ "$P" ]; then
-		exec 9< "$0"; flock 9
+		ARM
 		( 
-			while [ "$1" != "%" ]; do
-				_lock $n "$1"
-				n=$((n + 1))
-				echo + "$1"
-				shift
-			done
-			shift # %
-
-			flock -u 9
-			"$@"
+			_lock
+			UNARM
+			"$@" || _err 8 "RRR: $*"
 			debug RRR DONE "$@"
 		) &
-		exec 8< "$0"; flock -s 8
-		exec 8<&- 9<&-
+		WAIT
 		debug CARRY ON RRR "$@"
 	else
-		while [ "$1" != "%" ]; do
-			echo + "$1"
-			shift
-		done
-		shift # %
-		"$@"
+		"$@" || _err 8 "RRR: $*"
 		debug RRR DONE "$@"
 	fi
 }
@@ -173,6 +203,7 @@ RRRN() {
 : ${CPP:=cpp}
 : ${CFLAGS:=}
 : ${LDFLAGS:=}
+: ${BUILD:=build}
 
 Q command -v clean || clean() { rm -rf build/; echo '- build/'; } 
 

@@ -13,7 +13,7 @@ tools() {
 build() {
 	CFLAGS='-Isrc -Ibuild -g -O0 -DDEBUG -pipe -fno-omit-frame-pointer'
 
-	mkdir -p build/
+	mkdir -p "$BUILD/"
 
 	LD packcc external/packcc/src/packcc.c
 
@@ -29,3 +29,12 @@ build() {
 	LD app build/parser.o build/main.o 
 }
 
+_rule_t() {
+	echo hello world	
+}
+
+t() {
+	for i in $(seq 1 10); do
+		RE bullshit.t
+	done
+}
