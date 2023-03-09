@@ -17,9 +17,9 @@ build() {
 
 	LD packcc external/packcc/src/packcc.c
 
+	RE src/test.c
 	RE src/parser.peg
 	RE src/main.c
-	RE src/test.c
 	RE parser.c
 
 	LD test build/test.o

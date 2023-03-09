@@ -10,10 +10,32 @@
 TARGETS=""
 LASTLOCK=""
 PARENTPID="$$"
+PIDS=""
 
 trap _cleanup EXIT
-_cleanup() { [ -d "${T:-}" ] && rm -rf "$T"; echo I CLEAN GOOD YOU PAY $T; }
-_err() { local c="$1"; shift; echo >&2 "${0##*/}: $*"; kill -INT "-$PARENTPID"; }
+trap _exception INT TERM
+
+_cleanup() {
+	trap - EXIT
+	if [ -d "${T:-}" ]; then
+		rm -rf "$T"
+		debug "_cleanup $T"
+	fi
+}
+
+_exception() {
+	local c="${1:-0}"
+	_cleanup
+	trap - INT TERM
+	kill -INT "-$PARENTPID"
+	exit "$c"
+}
+
+_err() {
+	local c="$1"; shift
+	echo >&2 "${0##*/}: error: $*"
+	_exception $c
+}
 
 _dir="${XDG_RUNTIME_DIR:-${TMP:-/tmp}}"
 T="$(mktemp -d "${_dir}/${0##*/}.XXXXXX" 2>/dev/null || true)"
@@ -25,17 +47,12 @@ debug() { [ "$D" ] || return 0; echo >&2 "$@"; }
 # TODO build dir parametric
 # TODO build dir in tmp in mem outside project
 
-# CDPATH apparently causes unexpected 'cd' output on some platforms.
-# from redo/minimal
 unset CDPATH
 
 alias Q='>/dev/null'
 
-MARK() { touch -m -t 0001010000 "$1"; }
-# MARK() { rm -fv "$1"; }
-
 DO() {
-	local cmd="build/$1"; shift
+	local cmd="$BUILD/$1"; shift
 	debug DO "$cmd" "$@"
 	WANT "$cmd"
 	[ -f "$cmd" ] || _err 1 "command no exist: $cmd"
@@ -43,24 +60,25 @@ DO() {
 	"$cmd" "$@"
 }
 
-RUN() {
-	if Q "$@"; then :; else _err $? "$*"; fi
-	# better 2>null and in case of error repeat command again to show it
-}
-
-FIND() {
-	if [ -e "$1" ]; then echo "$1"
-	elif [ -e "build/$1" ]; then echo "build/$1"	
-	else _err 1 "dep not found: $1"
-	fi
+TFIND() {
+	# TODO check VPATH
+	local t IFS=: w="$1"
+	for t in $TARGETS; do
+		case "$t" in
+			"$w")   echo "$t"; return 0;;
+			*/"$w") echo "$t"; return 0;;
+		esac
+	done
+	echo >&2 $TARGETS
+	_err 8 "not found: $w"
 }
 
 OK() {
-	local t="$1" code=0 d; shift
-	echo OK "$@"
+	local d t="$1" code=0; shift
 	[ -e "$t" ] || code=1
 	for d; do
  		[ "$t" -ef "$d" ] && _err 8 "same file in ok: $t vs $d"
+		[ -e "$d" ] || _err 8 "deps not exist: $d"
 		WANT "$d"
 		[ $code -eq 0 -a "$d" -nt "$t" ] && code=1
 	done
@@ -78,8 +96,7 @@ LOCK() {
 }
 
 _lock() {
-	: ${fd:=3}
-	local fd=3 f IFS=:
+	local f fd=3 IFS=:
 	for f in $LASTLOCK; do
 		mkdir -p "$T/$f"
 		eval "exec $fd< '$T/$f'"
@@ -91,17 +108,16 @@ _lock() {
 
 WANT() {
 	[ "$P" ] || return 0
-	local IFS=:
-	debug WANT $1
-	for t in $TARGETS; do
-		[ "$t" = "$1" -a -e "$T/$1" ] || continue
-		exec 55< "$T/$1" || _err 5 "WANT: no access: $1"
-		debug WAIT $1
-		flock -s 55
-		exec 55<&-
-		break
-	done
-	debug ACCESS $1
+	local t IFS=: w="$1"
+	debug WANT $w
+	[ -e "$w" ] || w="$(TFIND "$w")"
+	if [ -e "$T/$w" ]; then
+		exec 7< "$T/$w" || _err 5 "WANT: no access: $w"
+		debug WAIT $w
+		flock -s 7
+		exec 7<&-
+	fi
+	debug ACCESS $w
 }
 
 LD() {
@@ -118,61 +134,57 @@ RE() {
 	"$rule" "$@"
 }
 
-_map() {
-	local cmd="$1"; shift
-	
-}
-
 _rule_c() {
-	local h o n c b;
-	c="$(FIND "$1")"
-	n="${c##*/}"
-	b="${n%.c}.o"
-    o="build/${n%.c}.o"
+	local t h o b c="$1"
+	[ -e "$c" ] || c="$(TFIND "$c")"
+	b="${c##*/}"
+	o="${b%.c}.o"
+    t="$BUILD/$o"
 
-	LOCK "$o" 
+	LOCK "$t" 
 	WANT "$c"
 
 	set --
 	for h in $($CPP $CFLAGS -MM -MG "$c"); do
 		case "$h" in
-			(\\|"$b:"|"$c") continue;;
+			(\\|"$o:"|"$t:"|"$c") continue;;
 		esac
+		[ -e "$h" ] || h="$(TFIND "$h")"
 		set -- "$@" "$h"
 	done
 
-	OK "$o" "$c" "$@" ||
-		RRR $CC $CFLAGS -c -o "$o" "$c"
+	OK "$t" "$c" "$@" || RRR $CC $CFLAGS -c -o "$t" "$c"
 }
 
 _rule_peg() {
-	local p="$1" b="${1##*/}"
-	local c="build/${b%.peg}.c" h="build/${b%.peg}.h"
+	local p="$1"
+	[ -e "$p" ] || p="$(TFIND "$p")"
+	local b="${1##*/}"
+	b="${b%.peg}"
+	local c="$BUILD/${b}.c" h="$BUILD/${b}.h"
 
 	LOCK "$c" "$h"
-	WANT build/packcc
-
-	OK "$c" "$p" ||
-		RRR _peg "$p" "${b%.peg}"
+	WANT packcc
+	OK "$c" "$p" || RRR _peg "$p" "$b"
 }
 
 _peg() {
-	(
-		cd build/
-		./packcc -o "$2" ../"$1" || _err 8 "packcc"
-	)
+	local old="$PWD"
+	cd "$BUILD"
+	./packcc -o "$2" "$old/$1" || _err 8 "packcc"
+	cd "$old"
 }
 
-ARM() {
+_sem() {
 	exec 9< "$0"
 	flock 9
 }
 
-UNARM() {
+_semgo() {
 	flock -u 9
 }
 
-WAIT() {
+_semwait() {
 	exec 8< "$0"
 	flock -s 8
 	exec 8<&- 9<&-
@@ -181,15 +193,16 @@ WAIT() {
 RRR() {
 	debug RRR "$@"
 	if [ "$P" ]; then
-		ARM
+		_sem
 		( 
 			_lock
-			UNARM
+			_semgo
 			"$@" || _err 8 "RRR: $*"
-			debug RRR DONE "$@"
+			debug BG RRR DONE "$@"
 		) &
-		WAIT
-		debug CARRY ON RRR "$@"
+		PIDS="$PIDS $!"
+		_semwait
+		debug BG RRR "$@"
 	else
 		"$@" || _err 8 "RRR: $*"
 		debug RRR DONE "$@"
@@ -205,13 +218,16 @@ RRR() {
 : ${LDFLAGS:=}
 : ${BUILD:=build}
 
-Q command -v clean || clean() { rm -rf build/; echo '- build/'; } 
+Q command -v clean || clean() { rm -rf $BUILD/; echo '- $BUILD/'; } 
 
 [ $# -gt 0 ] || set -- build
 
 for arg; do
 	Q command -v "$arg" || _err 8 "no such target: $arg"
 	eval "$arg"
-	wait
+	for p in $PIDS; do
+		wait $p
+	done
+	PIDS=""
 done
 
