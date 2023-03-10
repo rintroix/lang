@@ -7,7 +7,7 @@
 #include "parser.h"
 
 ast *transform(vec(macro) macros, ast *a);
-void rulify(scope *s, ast *a, vec(rule) rules);
+rule rulify(scope *s, ast *a);
 
 ast *lift(ast a)
 {
@@ -48,20 +48,19 @@ int is(ast *a, ast *pat)
 		todo;
 		break;
 
-	case A_FN:
-		if (!pat->fn.def.name)
-			return 1;
+		// case A_FN: // todo delme
+		// 	if (!pat->fn.def.name)
+		// 		return 1;
 
-		if (0 != strcmp(pat->fn.def.name, a->fn.def.name))
-			return 0;
+		// 	if (0 != strcmp(pat->fn.def.name, a->fn.def.name))
+		// 		return 0;
 
-		if (pat->fn.args || pat->fn.def.init || pat->fn.def.type ||
-		    pat->fn.args)
-			bug("%s: extra fun", __func__);
+		// 	if (pat->fn.args || pat->fn.def.init || pat->fn.def.type
+		// || 	    pat->fn.args) 		bug("%s: extra fun", __func__);
 
-		return 1;
-		
-		break;
+		// 	return 1;
+
+		// 	break;
 
 	default:
 		bug("%s: unhandled %d", __func__, pat->type);
@@ -78,54 +77,74 @@ int has(vec(ast) list, ast *pattern)
 	return 0;
 }
 
-void print_ast(ast *a)
+void cadd(vec(char) out, char *s)
+{
+	while (*s) {
+		push(out, *s);
+		s++;
+	}
+}
+
+void _show_ast(vec(char) out, ast *a)
 {
 	switch (a->type) {
 	case A_LIST: {
-		printf("(");
-		forv(a->list.items, it, i) {
+		cadd(out, "(");
+		forv(a->list.items, it, i)
+		{
 			if (i != 0)
-				printf(" ");
-			printl_ast(it);
+				cadd(out, " ");
+			_show_ast(out, it);
 		}
-		printf(")");
-	} break;
-
-	case A_FN: {
-		printf("FN %s", a->fn.def.name);
+		cadd(out, ")");
 	} break;
 
 	case A_CALL: {
-		printf("%s(", a->call.name);
+		cadd(out, a->call.name);
+		cadd(out, "(");
 		forv(a->call.args, arg, i)
 		{
 			if (i != 0)
-				printf(" ");
-			print_ast(arg);
+				cadd(out, " ");
+			_show_ast(out, arg);
 		}
-		printf(")");
+		cadd(out, ")");
 	} break;
 
 	case A_ID:
 		if (a->id.type == I_KW)
-			printf(":");
-		printf("%s", a->id.name);
+			cadd(out, ":");
+		cadd(out, a->id.name);
 		break;
 
 	case A_OPER:
-		printf("(");
-		print_ast(a->oper.left);
-		printf(" ");
-		printf("%s", a->oper.name);
-		printf(" ");
-		print_ast(a->oper.right);
-		printf(")");
+		cadd(out, "(");
+		_show_ast(out, a->oper.left);
+		cadd(out, " ");
+		cadd(out, a->oper.name);
+		cadd(out, " ");
+		_show_ast(out, a->oper.right);
+		cadd(out, ")");
 		break;
 
 	default:
-		bug("%s: unhandled %d", __func__, a->type);
+		bug("unhandled %d", a->type);
 		break;
 	}
+}
+
+char *show_ast(ast *a) {
+	vec(char) chars = avec(char);
+	_show_ast(chars, a);
+	char *out = malloc(vlen(chars) + 1);
+	forv(chars, c, i) { out[i] = *c; }
+	out[vlen(chars)] = '\0';
+	return out;
+}
+
+void print_ast(ast *a)
+{
+	printf("%s", show_ast(a));
 }
 
 void printl_ast(ast *a)
@@ -134,17 +153,17 @@ void printl_ast(ast *a)
 	printf("\n");
 }
 
-ast list0()
+ast alist0()
 {
 	vec(ast) items = avec(ast);
-	return list(items);
+	return alist(items);
 }
 
-ast list1(ast a)
+ast alist1(ast a)
 {
 	vec(ast) items = avec(ast);
 	push(items, a);
-	return list(items);
+	return alist(items);
 }
 
 ast append(ast l, ast a)
@@ -300,7 +319,8 @@ vec(define) funargs(vec(ast) list)
 	return out;
 }
 
-ast* atom_or_list(vec(ast) iter, size_t start, size_t end) {
+ast *atom_or_list(vec(ast) iter, size_t start, size_t end)
+{
 	assert(end >= start);
 	switch (end - start) {
 	case 0:
@@ -312,16 +332,17 @@ ast* atom_or_list(vec(ast) iter, size_t start, size_t end) {
 		break;
 
 	default:
-		return lift(list(vslice(iter, start, end)));
+		return lift(alist(vslice(iter, start, end)));
 		break;
 	}
 }
 
-ast* operate(vec(macro) macros, vec(ast) list, size_t start)
+ast *operate(vec(macro) macros, vec(ast) list, size_t start)
 {
 	// TODO better find
 	size_t pos = vlen(list);
-	forvr(list, it, start, vlen(list), index) {
+	forvr(list, it, start, vlen(list), index)
+	{
 		if (is(it, O(0))) {
 			pos = index;
 			break;
@@ -348,7 +369,7 @@ ast* operate(vec(macro) macros, vec(ast) list, size_t start)
 	assert(op->type == A_ID && op->id.type == I_OP);
 
 	ast *left = transform(macros, atom_or_list(list, start, pos));
-	return lift(oper(op->id.name, left, operate(macros, list, pos + 1)));
+	return lift(aoper(op->id.name, left, operate(macros, list, pos + 1)));
 }
 
 int _match(vec(ast) list, ast **patterns, size_t n)
@@ -365,7 +386,7 @@ int _match(vec(ast) list, ast **patterns, size_t n)
 	return vlen(list) == n;
 }
 
-#define LEN(A) (sizeof(A)/sizeof((A)[0]))
+#define LEN(A) (sizeof(A) / sizeof((A)[0]))
 #define MA(...) ((ast *[]){__VA_ARGS__})
 #define match(L, ...) _match(L, MA(__VA_ARGS__), LEN(MA(__VA_ARGS__)))
 
@@ -386,6 +407,45 @@ block transform_block(vec(macro) macros, vec(ast) list, size_t start,
 	return (block){.defs = defs, .items = items};
 }
 
+block transform_where(vec(macro) macros, vec(ast) items, size_t start,
+		      size_t end)
+{
+	check(end >= start);
+
+	vec(function) funs = avec(function);
+	vec(define) defs = avec(define);
+
+	forvr(items, it, start, end)
+	{
+		if (it->type != A_LIST)
+			error("no a list: %s", show_ast(it));
+
+		vec(ast) list = it->list.items;
+
+		if (match(list, W("fn"), W(0), K(0), L(0))) {
+			char *name = vat(list, 1)->id.name;
+			char *type = vat(list, 2)->id.name;
+			vec(define) args = funargs(vat(list, 3)->list.items);
+			ast *init = lift(ablock(
+			    transform_block(macros, list, 4, vlen(list))));
+			define self = def(name, type, init);
+
+			push(funs, fn(self, args));
+			continue;
+		}
+
+		if (match(list, W("let"))) {
+			todo;
+			// if def, put to defs
+			continue;
+		}
+
+		error("wrong where item"); // todo better
+	}
+
+	return (block){.functions = funs, .defs = defs, .items = avec(ast)};
+}
+
 ast *transform(vec(macro) macros, ast *a)
 {
 	// TODO compactor first
@@ -395,49 +455,41 @@ ast *transform(vec(macro) macros, ast *a)
 
 	vec(ast) items = a->list.items;
 
-	if (match(items, W("fn"), W(0), K(0), L(0))) {
-		char *name = vat(items, 1)->id.name;
-		char *type = vat(items, 2)->id.name;
-		vec(define) args = funargs(vat(items, 3)->list.items);
-		ast *init = lift(ablock(transform_block(
-		    macros, items, 4, vlen(items))));
-		return lift(fn(def(name, type, init), args));
-	} 
-	
 	if (has(items, O(0))) {
 		return operate(macros, items, 0);
 	}
 
+	// else it is a call
 	ast *head = vat(items, 0);
 	assert(head->type == A_ID && head->id.type == I_WORD);
 
 	vec(ast) args = vslice(items, 1, vlen(items));
 
-	return lift(call(head->id.name, args));
+	return lift(acall(head->id.name, args));
 }
 
-scope *newscope(vec(ast) funs, vec(define) defs, scope *next)
+scope *newscope(vec(function) funs, vec(define) defs, scope *next)
 {
-	// TODO FN struct
 	scope *out = malloc(sizeof(scope));
-	*out = (scope){.functions = funs ? funs : avec(ast),
+	*out = (scope){.functions = funs ? funs : avec(function),
 		       .defs = defs ? defs : avec(define),
 		       .next = next};
 	return out;
 }
 
-int satisfies(rule *r, define *d) {
-	switch(r->type) {
+int satisfies(rule *r, define *d)
+{
+	switch (r->type) {
 	case R_EMPTY:
 		return 1;
 		break;
 
 	case R_IS:
-		if (! d->type)
+		if (!d->type)
 			return 1;
-		if (! r->type)
+		if (!r->type)
 			bug("%s: is no type", __func__);
-		return 0 == strcmp(r->is.name, d->type);		
+		return 0 == strcmp(r->is.name, d->type);
 		break;
 
 	case R_REQ:
@@ -446,13 +498,15 @@ int satisfies(rule *r, define *d) {
 	}
 }
 
-int compatible(vec(define) args, vec(rule) rules) {
-	error("todo next log");
-
-	if (vlen(args) != vlen(rules))
+int compatible(vec(define) args, vec(rule) rules)
+{
+	if (vlen(args) != vlen(rules)) {
+		log("len mismatch %zu vs %zu", vlen(args), vlen(rules));
 		return 0;
+	}
 
-	forv(args, arg, i) {
+	forv(args, arg, i)
+	{
 		if (!satisfies(vat(rules, i), arg))
 			return 0;
 	}
@@ -460,39 +514,29 @@ int compatible(vec(define) args, vec(rule) rules) {
 	return 1;
 }
 
-int infer(scope *s, candidate* c) {
-	assert(c->ast->type == A_FN);
-	rulify(s, c->ast, c->rules);
-
-	return 1; // todo
-}
-
 vec(candidate) find_candidates(scope *scope, char *name, vec(rule) arg_rules)
 {
 	vec(candidate) candidates = avec(candidate);
 
-	log("find for %s among %d", name, vlen(scope->functions));
-
 	while (scope) {
+		log("find for %s among %zu", name, vlen(scope->functions));
 		forv(scope->functions, it)
 		{
-			if (it->type != A_FN)
-				bug("%s: not fun", __func__);
+			log("%s vs %s", name, it->def.name);
 
-			log("%s vs %s", name, it->fn.def.name);
-
-			if (0 != strcmp(name, it->fn.def.name))
+			if (0 != strcmp(name, it->def.name))
 				continue;
 
 			log("name good");
 
-			if (compatible(it->fn.args, arg_rules)) {
+			if (compatible(it->args, arg_rules)) {
 				log("compatible");
 				vec(rule) rules = avec(rule);
 
-				candidate c = can(it, rules);
-				if (infer(scope, &c))
-					push(candidates, c);
+				// TODO next
+				// candidate c = can(it, rules);
+				// if (infer(scope, &c))
+				// 	push(candidates, c);
 			}
 		}
 		scope = scope->next;
@@ -507,13 +551,12 @@ request *newreq(scope *scope, char *name, vec(rule) args)
 	vec(candidate) candidates = find_candidates(scope, name, args);
 	if (!vlen(candidates))
 		error("no candidates for '%s'", name);
-	*out = (request){.scope = scope,
-			 .args = args,
-			 .candidates = candidates};
+	*out =
+	    (request){.scope = scope, .args = args, .candidates = candidates};
 	return out;
 }
 
-rule *newrule(enum e_rule type, char* name)
+rule *newrule(enum e_rule type, char *name)
 {
 	rule *out = malloc(sizeof(rule));
 	switch (type) {
@@ -521,7 +564,7 @@ rule *newrule(enum e_rule type, char* name)
 		*out = (rule){.type = type};
 		break;
 	case R_IS:
-		*out = (rule){.type = type, .is = { .name = name }};
+		*out = (rule){.type = type, .is = {.name = name}};
 		break;
 	case R_REQ:
 		todo;
@@ -530,10 +573,12 @@ rule *newrule(enum e_rule type, char* name)
 	return out;
 }
 
-define * find_def(scope *s, char *name) {
-	while(s){
+define *find_def(scope *s, char *name)
+{
+	while (s) {
 		log("LEN %ld", vlen(s->defs));
-		forv(s->defs, d) {
+		forv(s->defs, d)
+		{
 			log("%s vs %s", name, d->name);
 			if (0 == strcmp(name, d->name)) {
 				log("found def: %s", name);
@@ -542,31 +587,35 @@ define * find_def(scope *s, char *name) {
 		}
 		s = s->next;
 	}
- 	error("def not found: %s", name);
+	error("def not found: %s", name);
 }
 
-void rulify(scope *s, ast *a, vec(rule) rules) {
+rule rulify(scope *s, ast *a)
+{
 	switch (a->type) {
 	case A_LIST: {
 		bug("list");
 	} break;
 
-	case A_FN: {
-		// TODO field in scope for opening function
-		s = newscope(0, a->fn.args, s);
-		rulify(s, a->fn.def.init, rules);
-	} break;
+		// case A_FN: {
+		// 	// uODO field in scope for opening function
+		// 	s = newscope(0, a->fn.args, s);
+		// 	rulify(s, a->fn.def.init, rules);
+		// } break;
 
 	case A_CALL: {
-		push(rules, ((rule){.type = R_REQ,
-				    .req = *newreq(s, a->call.name, rules)}));
-		todo;
+		vec(rule) arg_rules = avec(rule);
+		// TODO map
+		forv(a->call.args, arg) { push(arg_rules, rulify(s, arg)); }
+		return (rule){.type = R_REQ,
+			      .req = *newreq(s, a->call.name, arg_rules)};
 	} break;
 
 	case A_ID:
 		log("id %s", a->id.name);
 		assert(a->id.type == I_WORD);
 		find_def(s, a->id.name);
+		todo;
 		break;
 
 	case A_OPER:
@@ -576,9 +625,8 @@ void rulify(scope *s, ast *a, vec(rule) rules) {
 	case A_BLOCK:
 		log("block");
 		s = newscope(0, a->block.defs, s);
-		forv(a->block.items, item) {
-			rulify(s, item, rules);
-		}
+		forv(a->block.items, item) { rulify(s, item); }
+		todo;
 		break;
 
 	case A_MARK:
@@ -587,37 +635,31 @@ void rulify(scope *s, ast *a, vec(rule) rules) {
 	}
 }
 
-void compile(request *r) {
-	todo;
-}
+void compile(request *r) { todo; }
 
 int main()
 {
-	vec(ast) topast = avec(ast);
+	vec(ast) tops = avec(ast);
 	vec(macro) macros = avec(macro);
 
 	ast a;
 	pcc_context_t *ctx = pcc_create(0);
 	while (pcc_parse(ctx, &a)) {
-		// TODO recognise macro
-		push(topast, a);
+		push(tops, a);
 	}
 	pcc_destroy(ctx);
 
-	if (a.type != 0) 
-		bug("%s: parser top level return", __func__);
+	if (a.type != 0)
+		bug("parser top level return");
 
-	forv(topast, it) {
-		*it = *transform(macros, it);
-	}
+	forv(tops, it) { *it = *transform(macros, it); }
 
+	block btop = transform_where(macros, tops, 0, vlen(tops));
 
-	scope *top = newscope(topast, 0, 0);
-	vec(rule) main_rules = avec(rule);
-	request *mainreq = newreq(top, "main", main_rules);
-	compile(mainreq);
+	// scope *top = newscope(tops, 0, 0);
+	// vec(rule) main_rules = avec(rule);
+	// request *mainreq = newreq(top, "main", main_rules);
+	// compile(mainreq);
 
 	log("END");
 }
-
-

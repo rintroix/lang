@@ -34,9 +34,16 @@ typedef struct define {
 	struct ast *init;
 } define;
 
+typedef struct function {
+	define def;
+	vec(define) args;
+} function;
+
+#define fn(DEF, ARGS) ((function){.def = (DEF), .args = (ARGS)})
+
 enum ast_type {
-	A_FN = 1,
-	A_LIST,
+	// A_FN = 1, // delme
+	A_LIST = 1,
 	A_CALL,
 	A_ID,
 	A_OPER,
@@ -50,6 +57,7 @@ enum id_type { I_WORD, I_KW, I_OP };
 typedef struct ast ast;
 
 typedef struct block {
+	vec(function) functions;
 	vec(define) defs;
 	vec(ast) items;
 } block;
@@ -57,11 +65,6 @@ typedef struct block {
 struct ast {
 	enum ast_type type;
 	union {
-		struct {
-			define def;
-			vec(define) args;
-		} fn;
-
 		struct {
 			vec(ast) items;
 		} list;
@@ -86,47 +89,43 @@ struct ast {
 	};
 };
 
-#define op(NAME) ((ast){.type = A_ID, .id = {.name = (NAME), .type = I_OP}})
+#define aop(NAME) ((ast){.type = A_ID, .id = {.name = (NAME), .type = I_OP}})
 
-#define kw(NAME) ((ast){.type = A_ID, .id = {.name = (NAME), .type = I_KW}})
+#define akw(NAME) ((ast){.type = A_ID, .id = {.name = (NAME), .type = I_KW}})
 
-#define word(NAME) ((ast){.type = A_ID, .id = {.name = (NAME), .type = I_WORD}})
+#define aword(NAME) ((ast){.type = A_ID, .id = {.name = (NAME), .type = I_WORD}})
 
 #define ablock(BLOCK) ((ast){.type = A_BLOCK, .block = (BLOCK)})
 
-#define list(ITEMS) ((ast){.type = A_LIST, .list = {.items = (ITEMS)}})
+#define alist(ITEMS) ((ast){.type = A_LIST, .list = {.items = (ITEMS)}})
 
-#define call(NAME, ARGS)                                                       \
+#define acall(NAME, ARGS)                                                       \
 	((ast){.type = A_CALL, .call = {.name = (NAME), .args = (ARGS)}})
 
-#define oper(NAME, L, R)                                                       \
+#define aoper(NAME, L, R)                                                       \
 	((ast){.type = A_OPER,                                                 \
 	       .oper = {.name = (NAME), .left = (L), .right = (R)}})
-
-#define fn(DEF, ARGS)                                                          \
-	((ast){.type = A_FN, .fn = {.def = (DEF), .args = (ARGS)}})
 
 #define def(NAME, TYPE, INIT)                                                  \
 	((define){.name = NAME, .type = (TYPE), .init = (INIT)})
 
-ast dot(ast l, ast r);
-ast list0();
-ast list1(ast a);
+ast alist0();
+ast alist1(ast a);
 ast append(ast l, ast a);
 void printl_ast(ast *t);
 
-#define W(x) &word(x)
-#define L(x) &list(x)
-#define K(x) &kw(x)
-#define O(x) &op(x)
-#define F(x) &fn(def(x, 0, 0))
+#define W(x) &aword(x)
+#define L(x) &alist(x)
+#define K(x) &akw(x)
+#define O(x) &aop(x)
+// #define F(x) &fn(def(x, 0, 0))
 
 typedef struct macro {
 	char *name;
 } macro;
 
 typedef struct scope {
-	vec(ast) functions;
+	vec(function) functions;
 	vec(define) defs;
 	struct scope *next;
 } scope;

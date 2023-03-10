@@ -11,8 +11,8 @@
 
 top <- _* l:list { $$ = l; } / _* !.
 
-list <- '(' _*            ')' { $$ = list0(); }
-      / '(' _* a:atom  _* ')' { $$ = list1(a); }
+list <- '(' _*            ')' { $$ = alist0(); }
+      / '(' _* a:atom  _* ')' { $$ = alist1(a); }
       / '(' _* i:inner _* ')' { $$ = i; }
 
 inner <- d:dot  { $$ = d; }
@@ -21,10 +21,10 @@ inner <- d:dot  { $$ = d; }
 dot <- l:subdot _+ '.' _+ r:subdot { $$ = append(l, r); }
 
 subdot <- i:inner { $$ = i; }
-        / a:atom  { $$ = list1(a); }
+        / a:atom  { $$ = alist1(a); }
 
 many <- m:many _+ a:atom { $$ = append(m, a); }
-      / b:atom _+ c:atom { $$ = append(list1(b), c); }
+      / b:atom _+ c:atom { $$ = append(alist1(b), c); }
 
 atom <- l:list    { $$ = l; }
       / k:keyword { $$ = k; }
@@ -33,10 +33,10 @@ atom <- l:list    { $$ = l; }
 
 keyword <- ':' w:word { w.id.type = I_KW; $$ = w; }
 
-word <- [_a-zA-Z0-9-]+ { $$ = word(strdup($0)); }
+word <- [_a-zA-Z0-9-]+ { $$ = aword(strdup($0)); }
 
-oper <- !'.' opchar    { $$ = op(strdup($0)); }
-      / opchar opchar+ { $$ = op(strdup($0)); }
+oper <- !'.' opchar    { $$ = aop(strdup($0)); }
+      / opchar opchar+ { $$ = aop(strdup($0)); }
 
 opchar <- [!#$%&*+-./:;<=>?@\[\\\]^_`{|}~]
 
