@@ -54,11 +54,11 @@ typedef struct um_vec_h {
 	_um_vec_for_range(V, NAME, UmGen(_h), UmGen(_o), (INDEX), UmGen(_c),   \
 			  UmGen(_f), UmGen(_s), (START), UmGen(_e), (END))
 
-#define um_vec_push(V, ITEM)                                                   \
+#define um_vec_push(V, ...)                                                    \
 	do {                                                                   \
 		UmVType1(V) *_um_push_to_ptr =                                 \
 		    (UmVType1(V) *)_um_vec_push_to(UmVHead(V), UmVSize1(V));   \
-		*_um_push_to_ptr = (ITEM);                                     \
+		*_um_push_to_ptr = (__VA_ARGS__);                              \
 	} while (0)
 
 #define um_vec_verify(V) _um_vec_verify(UmVHead(V))

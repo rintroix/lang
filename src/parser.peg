@@ -1,4 +1,5 @@
 %value "struct ast"
+%auxil "FILE*"
 
 %source {
 #include <stdio.h>
@@ -7,6 +8,7 @@
 
 %header {
 #include "common.h"
+#define PCC_GETCHAR(AUX) fgetc(AUX)
 }
 
 top <- _* l:list { $$ = l; } / _* !.
@@ -30,10 +32,13 @@ atom <- l:list    { $$ = l; }
       / k:keyword { $$ = k; }
       / o:oper    { $$ = o; }
       / w:word    { $$ = w; }
+      / i:integer { $$ = i; }
 
-keyword <- ':' w:word { w.id.type = I_KW; $$ = w; }
+integer <- [0-9]+ { $$ = aint(strdup($0)); }
 
-word <- [_a-zA-Z0-9-]+ { $$ = aword(strdup($0)); }
+keyword <- ':' w:word { w.id.tag = I_KW; $$ = w; }
+
+word <- [_a-zA-Z] [_a-zA-Z0-9-]* { $$ = aword(strdup($0)); }
 
 oper <- !'.' opchar    { $$ = aop(strdup($0)); }
       / opchar opchar+ { $$ = aop(strdup($0)); }

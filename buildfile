@@ -5,7 +5,7 @@ alias t=tools
 alias d=debug
 
 run() {
-	build && DO app < ex.r
+	build && DO app ex.r
 }
 
 tools() {
@@ -13,7 +13,7 @@ tools() {
 }
 
 debug() {
-	gdb $BUILD/app
+	build && lldb $BUILD/app ex.r
 }
 
 build() {
