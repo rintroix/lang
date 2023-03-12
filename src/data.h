@@ -15,6 +15,8 @@
 
 enum e_type { T_UNKNOWN, T_BUILTIN, T_COMPOUND };
 
+typedef struct ast ast;
+
 typedef struct type {
 	enum e_type tag;
 	char *name;
@@ -28,8 +30,11 @@ typedef struct type {
 typedef struct define {
 	char *name;
 	type type;
-	struct ast *init;
+	ast *init;
 } define;
+
+#define def(NAME, TYPE, INIT)                                                  \
+	((define){.name = NAME, .type = (TYPE), .init = (INIT)})
 
 typedef struct function {
 	define self;
@@ -44,13 +49,11 @@ enum e_ast {
 	A_ID,
 	A_OPER,
 	A_BLOCK,
+	A_REF,
 	A_MARK
 };
 
 enum e_id { I_WORD, I_KW, I_OP, I_INT };
-
-
-typedef struct ast ast;
 
 typedef struct block {
 	vec(function) functions;
@@ -64,6 +67,10 @@ struct ast {
 		struct {
 			vec(ast) items;
 		} list;
+
+		struct {
+			define *def;
+		} ref;
 
 		struct {
 			char *name;
@@ -104,9 +111,6 @@ struct ast {
 	((ast){.tag = A_OPER,                                                 \
 	       .oper = {.name = (NAME), .left = (L), .right = (R)}})
 
-#define def(NAME, TYPE, INIT)                                                  \
-	((define){.name = NAME, .type = (TYPE), .init = (INIT)})
-
 #define W(x) &aword(x)
 #define L(x) &alist(x)
 #define K(x) &akw(x)
@@ -120,6 +124,12 @@ void printl_ast(ast *t);
 typedef struct macro {
 	char *name;
 } macro;
+
+typedef struct parse_ctx {
+	vec(define) defines;
+	vec(macro) macros;
+	struct parse_ctx *next;
+} parse_ctx;
 
 typedef struct scope {
 	vec(function) functions;
