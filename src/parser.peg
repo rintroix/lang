@@ -31,8 +31,8 @@ many <- m:many _+ a:atom { $$ = append(m, a); }
 atom <- l:list    { $$ = l; }
       / k:keyword { $$ = k; }
       / o:oper    { $$ = o; }
-      / w:word    { $$ = w; }
       / i:integer { $$ = i; }
+      / w:word    { $$ = w; }
 
 integer <- [0-9]+ { $$ = aint(strdup($0)); }
 

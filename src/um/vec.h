@@ -17,8 +17,9 @@ typedef struct um_vec_h {
 	struct um_vec_h *next;
 } um_vec_h;
 
-#define UmVItem(V) (***(V))
+#define UmVItem(V) (*(V))
 #define UmVType1(V) __typeof__(UmVItem(V))
+// NOLINTNEXTLINE
 #define UmVSize1(V) sizeof(UmVItem(V))
 #define UmVData(V, H) ((UmVType1(V) *)((H) + 1))
 #define UmVHead(V) (((um_vec_h *)(V)) - 1)
@@ -28,7 +29,7 @@ typedef struct um_vec_h {
 #define um_vec_alloc(T) (um_vec(T))_um_vec_alloc(UM_VEC_BUCKET_SIZE, 0)
 #define um_vec_alloc_manual(T, N)                                              \
 	(um_vec(T))_um_vec_alloc((N)*sizeof(T), 0)
-#define um_vec(T) T ***
+#define um_vec(T) T*
 #define um_vec_len(V) _um_vec_len(UmVHead(V))
 #define um_vec_for(...)                                                        \
 	UmVFor(__VA_ARGS__, H, H, H, H, _i, _d, L, L)(__VA_ARGS__)

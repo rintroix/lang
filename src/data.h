@@ -43,15 +43,7 @@ typedef struct function {
 
 #define fn(DEF, ARGS) ((function){.self = (DEF), .args = (ARGS)})
 
-enum e_ast {
-	A_LIST = 1,
-	A_CALL,
-	A_ID,
-	A_OPER,
-	A_BLOCK,
-	A_REF,
-	A_MARK
-};
+enum e_ast { A_LIST = 1, A_CALL, A_ID, A_OPER, A_BLOCK, A_REF, A_MARK };
 
 enum e_id { I_WORD, I_KW, I_OP, I_INT };
 
@@ -63,6 +55,7 @@ typedef struct block {
 
 struct ast {
 	enum e_ast tag;
+	type *type;
 	union {
 		struct {
 			vec(ast) items;
@@ -104,11 +97,11 @@ struct ast {
 
 #define alist(ITEMS) ((ast){.tag = A_LIST, .list = {.items = (ITEMS)}})
 
-#define acall(NAME, ARGS)                                                       \
+#define acall(NAME, ARGS)                                                      \
 	((ast){.tag = A_CALL, .call = {.name = (NAME), .args = (ARGS)}})
 
-#define aoper(NAME, L, R)                                                       \
-	((ast){.tag = A_OPER,                                                 \
+#define aoper(NAME, L, R)                                                      \
+	((ast){.tag = A_OPER,                                                  \
 	       .oper = {.name = (NAME), .left = (L), .right = (R)}})
 
 #define W(x) &aword(x)
@@ -125,9 +118,17 @@ typedef struct macro {
 	char *name;
 } macro;
 
+typedef struct callreq {
+	char *name;
+	type *ret;
+	vec(type*) args;
+} callreq;
+
 typedef struct parse_ctx {
 	vec(define) defines;
 	vec(macro) macros;
+	vec(callreq) callreqs;
+	vec(function) functions;
 	struct parse_ctx *next;
 } parse_ctx;
 
@@ -168,7 +169,7 @@ typedef struct rule {
 
 typedef struct let {
 	char *name;
-	struct rule rule;	
+	struct rule rule;
 } let;
 
 #endif // DATA_H
