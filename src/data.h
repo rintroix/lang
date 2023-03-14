@@ -13,7 +13,7 @@
 #define forvr(...) um_vec_for_range(__VA_ARGS__)
 #define vslice(V, START, END) (um_vec_slice(V, START, END))
 
-enum e_type { T_UNKNOWN, T_BUILTIN, T_COMPOUND };
+enum e_type { T_BUG, T_UNKNOWN, T_SIMPLE, T_COMPOUND };
 
 typedef struct ast ast;
 
@@ -29,19 +29,21 @@ typedef struct type {
 
 typedef struct define {
 	char *name;
-	type type;
+	unsigned typeindex;
 	ast *init;
 } define;
 
 #define def(NAME, TYPE, INIT)                                                  \
-	((define){.name = NAME, .type = (TYPE), .init = (INIT)})
+	((define){.name = NAME, .typeindex = (TYPE), .init = (INIT)})
 
 typedef struct function {
 	define self;
 	vec(define) args;
+	vec(type) types;
 } function;
 
-#define fn(DEF, ARGS) ((function){.self = (DEF), .args = (ARGS)})
+#define fn(DEF, ARGS, TYPES)                                                   \
+	((function){.self = (DEF), .args = (ARGS), .types = (TYPES)})
 
 enum e_ast { A_LIST = 1, A_CALL, A_ID, A_OPER, A_BLOCK, A_REF, A_MARK };
 
@@ -55,7 +57,7 @@ typedef struct block {
 
 struct ast {
 	enum e_ast tag;
-	type *type;
+	unsigned typeindex;
 	union {
 		struct {
 			vec(ast) items;
@@ -120,8 +122,9 @@ typedef struct macro {
 
 typedef struct callreq {
 	char *name;
-	type *ret;
-	vec(type*) args;
+	unsigned ret;
+	vec(unsigned) args;
+	vec(type) table;
 } callreq;
 
 typedef struct parse_ctx {
@@ -139,37 +142,17 @@ typedef struct scope {
 	struct scope *next;
 } scope;
 
-typedef struct candidate {
-	function *function;
-	struct rule *body;
-} candidate;
+// typedef struct candidate {
+// 	function *function;
+// 	struct rule *body;
+// } candidate;
 
-#define can(F, B) ((candidate){.function = (F), .body = (B)})
+// #define can(F, B) ((candidate){.function = (F), .body = (B)})
 
-typedef struct request {
-	struct scope *scope;
-	vec(struct rule) args;
-	vec(candidate) candidates;
-} request;
-
-enum e_rule {
-	R_EMPTY = 1,
-	R_IS,
-	R_REQ,
-};
-
-typedef struct rule {
-	enum e_rule tag;
-	union {
-		type *is;
-
-		request req;
-	};
-} rule;
-
-typedef struct let {
-	char *name;
-	struct rule rule;
-} let;
+// typedef struct request {
+// 	struct scope *scope;
+// 	vec(struct rule) args;
+// 	vec(candidate) candidates;
+// } request;
 
 #endif // DATA_H

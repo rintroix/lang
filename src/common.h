@@ -10,6 +10,7 @@
 #define _elog(CODE, ...)                                                       \
 	do {                                                                   \
 		log(__VA_ARGS__);                                              \
+		abort();                                                       \
 		exit(CODE);                                                    \
 	} while (0)
 
