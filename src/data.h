@@ -36,31 +36,39 @@ typedef struct define {
 #define def(NAME, INDEX, INIT)                                                  \
 	((define){.name = NAME, .index = (INDEX), .init = (INIT)})
 
+typedef struct callreq {
+	char *name;
+	size_t ret;
+	vec(size_t) args;
+} callreq;
+
+typedef struct opreq {
+	char *name;
+	size_t ret;
+	size_t left;
+	size_t right;
+} opreq;
+
 typedef struct typetable {
 	type ret;
 	vec(type) args;
 	vec(type) body;
+	vec(callreq) calls;
+	vec(opreq) ops;
 } typetable;
  
 typedef struct function {
 	define self;
 	vec(define) args;
-	vec(struct callreq) callreqs;
 	typetable table;
 } function;
 
-typedef struct callreq {
-	char *name;
-	size_t ret;
-	vec(size_t) args;
-	typetable table;
-} callreq;
-
-#define fn(DEF, ARGS, TABLE, REQS)                                             \
-	((function){.self = (DEF),                                             \
-		    .args = (ARGS),                                            \
-		    .table = (TABLE),                                          \
-		    .callreqs = (REQS)})
+#define fn(DEF, ARGS, TABLE)                                                   \
+	((function){                                                           \
+	    .self = (DEF),                                                     \
+	    .args = (ARGS),                                                    \
+	    .table = (TABLE),                                                  \
+	})
 
 enum e_ast { A_LIST = 1, A_CALL, A_ID, A_OPER, A_BLOCK, A_REF, A_MARK };
 
@@ -86,6 +94,7 @@ struct ast {
 
 		struct {
 			char *name;
+			size_t index;
 			vec(ast) args;
 		} call;
 
@@ -96,6 +105,7 @@ struct ast {
 
 		struct {
 			char *name;
+			size_t index;
 			struct ast *left;
 			struct ast *right;
 		} oper;
@@ -140,7 +150,6 @@ typedef struct macro {
 typedef struct parse_ctx {
 	vec(define) defines;
 	vec(macro) macros;
-	vec(callreq) callreqs;
 	vec(function) functions;
 	struct parse_ctx *next;
 } parse_ctx;
@@ -151,18 +160,5 @@ typedef struct scope {
 	vec(type) types;
 	struct scope *next;
 } scope;
-
-// typedef struct candidate {
-// 	function *function;
-// 	struct rule *body;
-// } candidate;
-
-// #define can(F, B) ((candidate){.function = (F), .body = (B)})
-
-// typedef struct request {
-// 	struct scope *scope;
-// 	vec(struct rule) args;
-// 	vec(candidate) candidates;
-// } request;
 
 #endif // DATA_H
