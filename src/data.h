@@ -29,21 +29,38 @@ typedef struct type {
 
 typedef struct define {
 	char *name;
-	unsigned typeindex;
+	size_t index;
 	ast *init;
 } define;
 
-#define def(NAME, TYPE, INIT)                                                  \
-	((define){.name = NAME, .typeindex = (TYPE), .init = (INIT)})
+#define def(NAME, INDEX, INIT)                                                  \
+	((define){.name = NAME, .index = (INDEX), .init = (INIT)})
 
+typedef struct typetable {
+	type ret;
+	vec(type) args;
+	vec(type) body;
+} typetable;
+ 
 typedef struct function {
 	define self;
 	vec(define) args;
-	vec(type) types;
+	vec(struct callreq) callreqs;
+	typetable table;
 } function;
 
-#define fn(DEF, ARGS, TYPES)                                                   \
-	((function){.self = (DEF), .args = (ARGS), .types = (TYPES)})
+typedef struct callreq {
+	char *name;
+	size_t ret;
+	vec(size_t) args;
+	typetable table;
+} callreq;
+
+#define fn(DEF, ARGS, TABLE, REQS)                                             \
+	((function){.self = (DEF),                                             \
+		    .args = (ARGS),                                            \
+		    .table = (TABLE),                                          \
+		    .callreqs = (REQS)})
 
 enum e_ast { A_LIST = 1, A_CALL, A_ID, A_OPER, A_BLOCK, A_REF, A_MARK };
 
@@ -57,7 +74,7 @@ typedef struct block {
 
 struct ast {
 	enum e_ast tag;
-	unsigned typeindex;
+	size_t index;
 	union {
 		struct {
 			vec(ast) items;
@@ -119,13 +136,6 @@ void printl_ast(ast *t);
 typedef struct macro {
 	char *name;
 } macro;
-
-typedef struct callreq {
-	char *name;
-	unsigned ret;
-	vec(unsigned) args;
-	vec(type) table;
-} callreq;
 
 typedef struct parse_ctx {
 	vec(define) defines;
