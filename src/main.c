@@ -37,11 +37,20 @@ type get_ret_type(typetable* table) {
 
 type get_arg_type(typetable* table, size_t index) {
 	return vget(table->args, index);
-	
 }
 
 type get_type(typetable* table, size_t index) {
 	return vget(table->body, index);
+}
+
+typetable clone_table(typetable table) {
+	bug_if_not(table.args);
+	bug_if_not(table.body);
+	return (typetable){
+		.ret = table.ret,
+		.args = vslice(table.args, 0, vlen(table.args)),
+		.body = vslice(table.body, 0, vlen(table.body)),
+	};
 }
 
 ast *alift(ast a)
@@ -116,9 +125,6 @@ int is(ast *a, ast *pat)
 char *show_type(type t)
 {
 	switch (t.tag) {
-	case T_BUG: {
-		return "!-BUG-!";
-	} break;
 	case T_SIMPLE: {
 		return t.name;
 	} break;
@@ -506,9 +512,6 @@ int types_compatible(type a, type b)
 		return 0;
 
 	switch (a.tag) {
-	case T_BUG: {
-		bug("type index 0");
-	} break;
 	case T_SIMPLE: {
 		return 0 == strcmp(a.name, b.name);
 	} break;
@@ -713,9 +716,6 @@ type unify_types(type a, type b) {
 	case T_UNKNOWN: {
 		bug("can't happen");
 	} break;
-	case T_BUG: {
-		bug("bug");
-	} break;
 	case T_COMPOUND: {
 		todo;
 	} break;
@@ -731,6 +731,69 @@ type unify_types(type a, type b) {
 	bug("unreachable");
 }
 
+void compile_ast(typetable *table, ast* a, int indent) {
+	bug_if_not(a);
+
+	switch (a->tag) {
+	case A_MARK: {
+		bug("mark");
+	} break;
+	case A_BLOCK: {
+		printf("%*s{\n", indent, "");
+		forv(a->block.items, item) {
+			compile_ast(table, item, indent + 2);		
+		}
+		printf("%*s}\n", indent, "");
+	} break;
+	case A_REF: {
+		printf("%s", a->ref.def->name);
+	} break;
+	case A_LIST: {
+		bug("list");
+	} break;
+	case A_CALL: {
+		if (indent)
+			printf("%*s", indent, "");
+		printf("%s(", a->call.name);
+		forv(a->call.args, arg, i) {
+			if (i)
+				printf(", ");
+			compile_ast(table, arg, 0);		
+		}
+		printf(")");
+		if (indent)
+			printf(";\n");
+	} break;
+
+	case A_ID: {
+		if (a->id.tag == I_KW)
+			bug("keyword");
+		if (a->id.tag == I_OP)
+			bug("op");
+		if (a->id.tag == I_WORD)
+			bug("word");
+		if (a->id.tag == I_INT)
+			printf("%s", a->id.name);
+	} break;
+
+	case A_OPER: {
+		todo;
+	} break;
+	}
+}
+
+void compile_one(parse_ctx *ctx, typetable *table, function *fun) {
+	printf("%s %s(", show_type(get_ret_type(table)), fun->self.name);
+	forv(fun->args, arg, i) {
+		if (i != 0)
+			printf(" ,");
+		printf("%s %s", show_type(get_arg_type(table, i)), arg->name);
+	}
+	printf(") {\n");
+	compile_ast(table, fun->self.init, 2);
+	printf("}\n");
+}
+
 void compile(parse_ctx *ctx, callreq *req)
 {
 	vec(function *) candidates = find_candidates(ctx, req);
@@ -743,32 +806,24 @@ void compile(parse_ctx *ctx, callreq *req)
 
 	function *f = vget(candidates, 0);
 
-	// vec(type) unitable = vslice(f->types, 0, vlen(f->types));
+	typetable unitable = clone_table(f->table);
 
-	// assert(req->ret == f->self.index); 
+	unitable.ret = unify_types(unitable.ret, req->table.ret);
+	forv(unitable.args, argp, i) {
+		*argp = unify_types(*argp, get_arg_type(&req->table, i));
+	}
 
-	// type *retp = vat(unitable, req->ret)
-	// *retp = unify(*retp, vget(req->table, req->ret));
-
-	// forv(req->args, argp, i) {
-	// 	push(unitable, unify(vget(req->table, *argp),
-	// 			     vget(f->types, vget(f->args, i).index)));
-	// }
-
-	// forvr(f->table, )
-
-	log("found %zu candidates for 'main'", vlen(candidates));
+	compile_one(ctx, &unitable, f);
 }
 
 int main(int argc, char **argv)
 {
-	vec(ast) tops = avec(ast);
-	vec(macro) macros = avec(macro);
-
 	check(argc == 2);
 
 	FILE *f = fopen(argv[1], "r");
 	check(f);
+
+	vec(ast) tops = avec(ast);
 
 	ast a;
 	pcc_context_t *ctx = pcc_create(f);
@@ -795,15 +850,6 @@ int main(int argc, char **argv)
 				    .table = maintable};
 
 	compile(&topctx, &mainreq);
-
-	// find candidates for req
-
-	// TODO execute main callreq
-
-
-	// scope *top = newscope(btop, core_scope());
-	// vec(rule) main_rules = avec(rule);
-	// request *r = newreq(top, "main", main_rules);
 
 	log("END");
 }

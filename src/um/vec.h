@@ -142,7 +142,7 @@ static inline char *_um_vec_slice(um_vec_h *head, size_t one, size_t start,
 	_um_vec_verify(head);
 	assert(end >= start);
 
-	while (start >= head->count) {
+	while (start && start >= head->count) {
 		start -= head->count;
 		end -= head->count;
 		head = head->next;

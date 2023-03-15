@@ -60,6 +60,28 @@ TEST vecs(void)
 	PASS();
 }
 
+TEST empty_vec(void)
+{
+	um_vec(int) a = um_vec_alloc(int);
+	ASSERT(um_vec_len(a) == 0);
+
+	um_vec(int) b = um_vec_slice(a, 0, um_vec_len(a));
+	ASSERT(um_vec_len(b) == 0);
+
+	int sum = 0;
+	um_vec_for(a, np) {
+		sum += *np;
+	}
+	ASSERT(sum == 0);
+
+	um_vec_for_range(a, np, 0, um_vec_len(a)) {
+		sum += *np;
+	}
+	ASSERT(sum == 0);
+
+	PASS();
+}
+
 void foo(int *i) {}
 
 TEST anon_structs(void) { PASS(); }
@@ -68,6 +90,7 @@ TEST anon_structs(void) { PASS(); }
 SUITE(vec_suite)
 {
 	RUN_TEST(vecs);
+	RUN_TEST(empty_vec);
 	RUN_TEST(anon_structs); // TODO
 }
 

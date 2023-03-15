@@ -13,7 +13,7 @@
 #define forvr(...) um_vec_for_range(__VA_ARGS__)
 #define vslice(V, START, END) (um_vec_slice(V, START, END))
 
-enum e_type { T_BUG, T_UNKNOWN, T_SIMPLE, T_COMPOUND };
+enum e_type { T_UNKNOWN = 1, T_SIMPLE, T_COMPOUND };
 
 typedef struct ast ast;
 
