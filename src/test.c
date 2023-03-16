@@ -82,16 +82,60 @@ TEST empty_vec(void)
 	PASS();
 }
 
-void foo(int *i) {}
+TEST deqs(void)
+{
+	umd(int) a = umd_new_manual(int, 1);
 
-TEST anon_structs(void) { PASS(); }
+	ASSERT(umd_len(a) == 0);
+
+	ASSERT(0 == umd_push(a, 100));
+	ASSERT(1 == umd_push(a, 200));
+	ASSERT(2 == umd_push(a, 300));
+	ASSERT(3 == umd_push(a, 400));
+	ASSERT(4 == umd_push(a, 500));
+
+	ASSERT(umd_len(a) == 5);
+
+	int suma = 0;
+	umd_for(a, n) {
+		suma += n;	
+	}
+
+	ASSERT(suma == 500 + 400 + 300 + 200 + 100);
+
+	ASSERT(umd_get(a, 0) == 100);
+	ASSERT(umd_get(a, 1) == 200);
+	ASSERT(umd_get(a, 2) == 300);
+	ASSERT(umd_get(a, 3) == 400);
+	ASSERT(umd_get(a, 4) == 500);
+
+	umd(int*) b = umd_new_manual(int*, 2);
+	int i1 = 10, i2 = 20, i3 = 30;
+
+	ASSERT(0 == umd_push(b, &i1));
+	ASSERT(1 == umd_push(b, &i2));
+	ASSERT(2 == umd_push(b, &i3));
+
+	ASSERT(umd_get(b, 0) == &i1);
+	ASSERT(umd_get(b, 1) == &i2);
+	ASSERT(umd_get(b, 2) == &i3);
+
+	int sumb = 0;
+	umd_for(b, n) {
+		sumb += *n;	
+	}
+
+	ASSERT(sumb == 10 + 20 + 30);
+
+	PASS();
+}
 
 /* Suites can group multiple tests with common setup. */
 SUITE(vec_suite)
 {
 	RUN_TEST(vecs);
+	RUN_TEST(deqs);
 	RUN_TEST(empty_vec);
-	RUN_TEST(anon_structs); // TODO
 }
 
 GREATEST_MAIN_DEFS();

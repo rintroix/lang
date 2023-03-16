@@ -1,6 +1,11 @@
 #ifndef UM_COMMON_H
 #define UM_COMMON_H
 
+#include <assert.h>
+#include <stdlib.h>
+#include <stddef.h>
+#include <string.h>
+
 #define UmEval2(X) X
 #define UmEval(X) UmEval2(X)
 #define UmCat2(X, Y) X##Y
