@@ -16,6 +16,16 @@ debug() {
 	build && lldb $BUILD/app ex.r
 }
 
+test() {
+	CFLAGS="-Isrc -I$BUILD -g -O0 -DDEBUG -pipe -fno-omit-frame-pointer"
+
+	mkdir -p "$BUILD/"
+
+	RE src/test.c
+	LD test build/test.o
+	DO test
+}
+
 build() {
 	CFLAGS="-Isrc -I$BUILD -g -O0 -DDEBUG -pipe -fno-omit-frame-pointer"
 

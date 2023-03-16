@@ -130,11 +130,46 @@ TEST deqs(void)
 	PASS();
 }
 
+TEST strs(void) {
+	char *init = "what's up, hello";
+	ums a = ums_dup(init);
+
+	ASSERT(0 == strncmp(UmDBucket(a)->data, init, strlen(init)));
+
+	ums_append_fmt(a, " world %d", 10);
+
+	char *result = "what's up, hello world 10";
+	ASSERT(0 == ums_cmp(a, result));
+
+	ums s1 = ums_dup("hi");
+
+	ASSERT( 0 == ums_cmp(s1, "hi"));
+	ASSERT(-1 == ums_cmp(s1, "hit"));
+	ASSERT( 1 == ums_cmp(s1, "ha"));
+
+	ums_append_fmt(s1, "X");
+	ums_append_fmt(s1, "Y");
+	ums_append_fmt(s1, "X");
+
+	ASSERT(0 == ums_cmp(s1, "hiXYX"));
+	ASSERT(UmDCountBuckets(s1) == 4);
+
+	ums s2 = ums_dup("hello  ");
+	ums_append_fmt(s2, "world"); 
+	ums_append_fmt(s2, "!!!");
+
+	ASSERT(0 == ums_cmp(s2, "hello  world!!!"));
+	ASSERT(UmDCountBuckets(s2) == 3);
+ 
+	PASS();
+}
+
 /* Suites can group multiple tests with common setup. */
 SUITE(vec_suite)
 {
 	RUN_TEST(vecs);
 	RUN_TEST(deqs);
+	RUN_TEST(strs);
 	RUN_TEST(empty_vec);
 }
 

@@ -3,5 +3,6 @@
 
 #include "um/vec.h"
 #include "um/deq.h"
+#include "um/str.h"
 
 #endif // UM_H

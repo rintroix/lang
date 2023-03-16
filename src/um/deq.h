@@ -33,14 +33,16 @@
 #define umd_for_range(...)                                                     \
 	UmDForRN(__VA_ARGS__, H, H, I, N, L, L, L, L)(__VA_ARGS__)
 
+#define UmDCover(D) umd(UmDItemT) 
 #define UmDItem(D) ****D
 #define UmDItemT(D) __typeof__(UmDItem(D))
 #define UmDItemS(D) sizeof(UmDItemT(D))
 #define UmDHeadT(D) _umd_head(UmDItemT(D))
 #define UmDHeadS(D) sizeof(UmDHeadT(D))
-#define UmDHead(D) ((UmDHeadT(D)*)(UmDBucket(D) - offsetof(UmDHeadT(D), bucket)))
+#define UmDHead(D) ((UmDHeadT(D)*)(((char*)UmDBucket(D)) - offsetof(UmDHeadT(D), bucket)))
 #define UmDBucketT(D) _umd_bucket(UmDItemT(D))
-#define UmDBucket(D) (((char*)D) - offsetof(UmDBucketT(D), data))
+#define UmDBucket(D) ((UmDBucketT(D)*)(((char*)D) - offsetof(UmDBucketT(D), data)))
+#define UmDCountBuckets(D) _umd_count_buckets(UmDBucket(D))
 
 #define UmDForN(a, b, c, d, e, f, g, X, ...) UmDForImp##X
 #define UmDForRN(a, b, c, d, e, f, g, X, ...) UmDForRImp##X
@@ -69,6 +71,17 @@
 				     (C) < (B)->end;                           \
 				     (C)++, (I)++, (N) = (B)->data[C])
 
+#define UmDNextSpaceOnEnd(B, N, CAP, ONE)                                      \
+	while ((B)->end + (N) > (CAP)) {                                       \
+		if ((B)->next) {                                               \
+			(B) = (B)->next;                                       \
+		} else {                                                       \
+			(B)->next = _umd_alloc_bucket(CAP, ONE);               \
+			(B) = (B)->next;                                       \
+			break;                                                 \
+		}                                                              \
+	}
+
 static inline void* umd_alloc(size_t count, size_t one) {
 	_umd_head(int) *mem = malloc(sizeof *mem + one * count);
 	assert(mem);
@@ -82,6 +95,17 @@ static inline void* _umd_alloc_bucket(size_t count, size_t one) {
 	return mem;
 }
 
+static inline size_t _umd_count_buckets(void *vbucket) {
+	size_t n = 0;
+	_umd_bucket(int) *b = vbucket;
+
+	for (; b; b = b->next) {
+		n++;
+	}
+
+	return n;
+}
+
 static inline size_t _umd_push(void *vhead, void *src, size_t one)
 {
 	assert(vhead);
@@ -90,21 +114,14 @@ static inline size_t _umd_push(void *vhead, void *src, size_t one)
 
 	size_t cap = h->cap;
 
-	while (b->end == cap) {
-		if (b->next) {
-			b = b->next;
-		} else {
-			b->next = _umd_alloc_bucket(cap, one);
-			b = b->next;
-			break;
-		}
-	}
+	UmDNextSpaceOnEnd(b, 1, cap, one);
 
 	memcpy(((char *)b->data) + one * b->end, src, one);
 	b->end++;
 
 	return h->len++;
 }
+
 
 static inline void *_umd_at(void *vhead, size_t one, size_t index)
 {
