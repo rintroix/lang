@@ -96,12 +96,12 @@ type *tlift(type t)
 	return ptr;
 }
 
-int is(ast *a, ast *pat)
+int is(ast a, ast *pat)
 {
 	if (!pat)
 		return 1;
 
-	if (pat->tag != a->tag)
+	if (pat->tag != a.tag)
 		return 0;
 
 	switch (pat->tag) {
@@ -115,13 +115,13 @@ int is(ast *a, ast *pat)
 		todo;
 	} break;
 	case A_ID: {
-		if (pat->id.tag != a->id.tag)
+		if (pat->id.tag != a.id.tag)
 			return 0;
 
 		if (!pat->id.name)
 			return 1;
 
-		if (0 == strcmp(pat->id.name, a->id.name))
+		if (0 == strcmp(pat->id.name, a.id.name))
 			return 1;
 
 		return 0;
@@ -162,7 +162,7 @@ type ttrace(type t) { todo; }
 
 int has(vec(ast) list, ast *pattern)
 {
-	forv(list, it)
+	veach(list, it)
 	{
 		if (is(it, pattern))
 			return 1;
@@ -191,11 +191,11 @@ void _show_ast(vec(char) out, ast a)
 	} break;
 	case A_LIST: {
 		cadd(out, "(");
-		forv(a.list.items, it, i)
+		veach(a.list.items, it, i)
 		{
 			if (i != 0)
 				cadd(out, " ");
-			_show_ast(out, *it);
+			_show_ast(out, it);
 		}
 		cadd(out, ")");
 	} break;
@@ -203,11 +203,11 @@ void _show_ast(vec(char) out, ast a)
 	case A_CALL: {
 		cadd(out, a.call.name);
 		cadd(out, "(");
-		forv(a.call.args, arg, i)
+		veach(a.call.args, arg, i)
 		{
 			if (i != 0)
 				cadd(out, " ");
-			_show_ast(out, *arg);
+			_show_ast(out, arg);
 		}
 		cadd(out, ")");
 	} break;
@@ -235,7 +235,7 @@ char *show_ast(ast a)
 	vec(char) chars = avec(char);
 	_show_ast(chars, a);
 	char *out = malloc(vlen(chars) + 1);
-	forv(chars, c, i) { out[i] = *c; }
+	veach(chars, c, i) { out[i] = c; }
 	out[vlen(chars)] = '\0';
 	return out;
 }
@@ -265,19 +265,19 @@ vec(define) funargs(typetable *tt, vec(ast) list)
 {
 	vec(define) out = avec(define);
 
-	forv(list, it)
+	veach(list, it)
 	{
-		switch (it->tag) {
+		switch (it.tag) {
 		case A_ID: {
-			check(it->id.tag == I_WORD);
+			check(it.id.tag == I_WORD);
 			size_t index =
 			    add_arg_type(tt, (type){.tag = T_UNKNOWN});
 			push(out,
-			     (define){.name = it->id.name, .index = index});
+			     (define){.name = it.id.name, .index = index});
 		} break;
 
 		case A_LIST: {
-			vec(ast) items = it->list.items;
+			vec(ast) items = it.list.items;
 			check(vlen(items) > 1);
 			ast *head = vat(items, 0);
 			check(head->tag == A_ID && head->id.tag == I_WORD);
@@ -288,7 +288,7 @@ vec(define) funargs(typetable *tt, vec(ast) list)
 		} break;
 
 		default: {
-			error("unexpected arg: %s", show_ast(*it));
+			error("unexpected arg: %s", show_ast(it));
 		} break;
 		}
 	}
@@ -360,7 +360,7 @@ ast parse_operator(context *ctx, typetable *table, vec(ast) list,
 
 int _match(vec(ast) list, ast **patterns, size_t n)
 {
-	forv(list, it, index)
+	veach(list, it, index)
 	{
 		if (index == n)
 			return 1;
@@ -388,9 +388,9 @@ block parse_block(context *ctx, typetable *table, vec(ast) list, size_t start,
 
 	// TODO defs in ctx
 
-	forvr(list, it, start, end)
+	vloop(list, it, start, end)
 	{
-		ast b = parse(ctx, table, *it);
+		ast b = parse(ctx, table, it);
 		push(items, b);
 	}
 
@@ -459,9 +459,9 @@ int table_compatible(typetable a, typetable b)
 	if (!types_compatible(a.ret, b.ret))
 		return 0;
 
-	forv(a.args, atp, i)
+	veach(a.args, it, i)
 	{
-		if (!types_compatible(*atp, vget(b.args, i)))
+		if (!types_compatible(it, vget(b.args, i)))
 			return 0;
 	}
 
@@ -476,13 +476,13 @@ vec(function *) find_candidates(context *ctx, typetable *table, char *name)
 		if (!ctx->functions)
 			continue;
 
-		forv(ctx->functions, f)
+		veach(ctx->functions, f, i)
 		{
-			if (0 != strcmp(name, f->self.name))
+			if (0 != strcmp(name, f.self.name))
 				continue;
 
-			if (table_compatible(*table, f->table)) {
-				push(out, f);
+			if (table_compatible(*table, f.table)) {
+				push(out, vat(ctx->functions, i)); // TODO ptr loop
 			}
 		}
 	}
@@ -498,13 +498,13 @@ context parse_top(context *upper, vec(ast) items)
 	context current = (context){
 	    .functions = functions, .defines = defines, .next = upper};
 
-	forv(items, it)
+	veach(items, it)
 	{
-		if (it->tag != A_LIST)
-			error("not a list: %s", show_ast(*it));
+		if (it.tag != A_LIST)
+			error("not a list: %s", show_ast(it));
 
-		if (!parse_top_one(&current, it->list.items))
-			error("bad top ast: %s", show_ast(*it));
+		if (!parse_top_one(&current, it.list.items))
+			error("bad top ast: %s", show_ast(it));
 	}
 
 	return current;
@@ -524,7 +524,7 @@ ast parse_list(context *ctx, typetable *table, vec(ast) items)
 	vec(size_t) arg_indices = avec(size_t);
 	forvr(items, item, 1, vlen(items))
 	{
-		ast arg = parse(ctx, table, *item);
+		ast arg = parse(ctx, table, item);
 		push(args, arg);
 		push(arg_indices, arg.index);
 	}
@@ -544,14 +544,15 @@ ast find_ref(context *ctx, char *name)
 		if (!ctx->defines)
 			continue;
 
-		forv(ctx->defines, d)
+		veach(ctx->defines, d, i)
 		{
-			if (0 != strcmp(name, d->name))
+			if (0 != strcmp(name, d.name))
 				continue;
 
+			// TODO ptr loop
 			return ((ast){.tag = A_REF,
-				      .index = d->index,
-				      .ref = {.def = d}});
+				      .index = d.index,
+				      .ref = {.def = vat(ctx->defines, i)}});
 		}
 	}
 
@@ -652,9 +653,9 @@ void compile_ast(output *o, typetable *table, ast a, int indent)
 	switch (a.tag) {
 	case A_BLOCK: {
 		odef(o, "%*s{\n", indent, "");
-		forv(a.block.items, item)
+		veach(a.block.items, item)
 		{
-			compile_ast(o, table, *item, indent + 2);
+			compile_ast(o, table, item, indent + 2);
 		}
 		odef(o, "%*s}\n", indent, "");
 	} break;
@@ -668,11 +669,11 @@ void compile_ast(output *o, typetable *table, ast a, int indent)
 		if (indent)
 			odef(o, "%*s", indent, "");
 		odef(o, "%s(", a.call.name);
-		forv(a.call.args, arg, i)
+		veach(a.call.args, arg, i)
 		{
 			if (i)
 				odef(o, ", ");
-			compile_ast(o, table, *arg, 0);
+			compile_ast(o, table, arg, 0);
 		}
 		odef(o, ")");
 		if (indent)
@@ -742,8 +743,8 @@ void compile_fn(context *ctx, output *o, typetable *table, function *fun)
 		if (i != 0)
 			odec(o, ", "), odef(o, ", ");
 		char *tname = show_type(get_arg_type(table, i));
-		odec(o, "%s %s", tname, arg->name);
-		odef(o, "%s %s", tname, arg->name);
+		odec(o, "%s %s", tname, arg.name);
+		odef(o, "%s %s", tname, arg.name);
 	}
 	odec(o, ");\n");
 	odef(o, ") {\n");
@@ -770,9 +771,10 @@ void compile(context *ctx, output *o, typetable *table, callreq *req)
 	typetable unitable = clone_table(f->table);
 
 	unitable.ret = unify_types(unitable.ret, table->ret);
-	forv(unitable.args, argp, i)
+	veach(unitable.args, argp, i) // TODO ptr loop
 	{
-		*argp = unify_types(*argp, get_arg_type(table, i));
+		*vat(unitable.args, i) =
+		    unify_types(argp, get_arg_type(table, i));
 	}
 
 	compile_fn(ctx, o, &unitable, f);

@@ -3,17 +3,17 @@
 
 #include "um/um.h"
 
-#define vec(T) um_vec(T)
-#define avec(T) (um_vec_alloc(T))
-#define push(V, ...) um_vec_push(V, __VA_ARGS__)
-#define vlen(V) (um_vec_len(V))
-#define vat(V, N) (um_vec_at(V, N))
-#define vget(V, N) (*vat(V, N))
-#define forv(...) um_vec_for(__VA_ARGS__)
-#define forvr(...) um_vec_for_range(__VA_ARGS__)
-#define vslice(V, START, END) (um_vec_slice(V, START, END))
-
-#define veach(...) um_vec_for(__VA_ARGS__)
+#define vec(T) umv(T)
+#define avec(T) umv_new(T)
+#define push(...) umv_push(__VA_ARGS__)
+#define vlen(V) umv_len(V)
+#define vat(V, N) umv_at(V, N)
+#define vget(V, N) umv_get(V, N)
+#define forv(...) umv_each(__VA_ARGS__)
+#define forvr(...) umv_loop(__VA_ARGS__)
+#define vslice(V, START, END) umv_slice(V, START, END)
+#define veach(...) umv_each(__VA_ARGS__)
+#define vloop(...) umv_loop(__VA_ARGS__)
 
 #define deq(T) umd(T)
 #define adeq(T) umd_new(T)

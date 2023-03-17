@@ -22,7 +22,7 @@
 		T data[];                                                      \
 	}
 
-#define umd(T) T***
+#define umd(T) T*****
 #define umd_new_manual(T, N) ((umd(T))umd_alloc(N, sizeof(T)))
 #define umd_new(T) umd_new_manual(T, UM_DEQ_BUCKET_SIZE / sizeof(T))
 #define umd_len(D) (UmDHead(D)->len)
@@ -33,7 +33,7 @@
 #define umd_loop(...) UmDLoopN(__VA_ARGS__, H, H, I, N, L, L, L, L)(__VA_ARGS__)
 
 #define _umd(D) umd(UmDItemT(D)) 
-#define UmDItem(D) ***D
+#define UmDItem(D) *****D
 #define UmDItemT(D) __typeof__(UmDItem(D))
 #define UmDItemS(D) sizeof(UmDItemT(D))
 #define UmDHeadT(D) _umd_head(UmDItemT(D))
@@ -95,6 +95,9 @@
 			break;                                                 \
 		}                                                              \
 	}
+
+// TODO do while
+// TODO addbucket api
 
 static inline void* umd_alloc(size_t count, size_t one) {
 	typedef _umd_head(char) t;

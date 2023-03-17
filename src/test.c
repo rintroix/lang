@@ -3,78 +3,74 @@
 
 TEST vecs(void)
 {
-	um_vec(int) v = um_vec_alloc_manual(int, 2);
+	umv(int) v = umv_new_manual(int, 2);
 
-	um_vec_h *head = UmVHead(v);
+	ASSERT(umv_len(v) == 0);
+	ASSERT(UmVHead(v)->cap == 2);
+	ASSERT(UmVHead(v)->bucket.next == (void*)0);
+	ASSERT(UmVCountBuckets(v) == 1);
 
-	ASSERT(um_vec_len(v) == 0);
-	ASSERT(head->alloc);
-	ASSERT(!head->next);
+	umv_push(v, 1);
+	umv_push(v, 2);
 
-	um_vec_push(v, 1);
-	um_vec_push(v, 2);
+	ASSERT(umv_len(v) == 2);
+	ASSERT(UmVHead(v)->bucket.next == (void*)0);
+	ASSERT(UmVCountBuckets(v) == 1);
 
-	ASSERT_EQ(head->count, 2);
-	ASSERT(!head->next);
+	umv_push(v, 3);
+	umv_push(v, 4);
 
-	um_vec_push(v, 3);
-	um_vec_push(v, 4);
+	ASSERT(umv_len(v) == 4);
+	ASSERT(UmVCountBuckets(v) == 2);
 
-	ASSERT_EQ(head->count, 2);
-	ASSERT_EQ(head->next->count, 2);
-	ASSERT(head->next);
-	ASSERT(!head->next->next);
+	umv_push(v, 5);
+	umv_push(v, 6);
 
-	um_vec_push(v, 5);
-	um_vec_push(v, 6);
+	ASSERT(umv_len(v) == 6);
+	ASSERT(UmVCountBuckets(v) == 3);
 
-	ASSERT(um_vec_len(v) == 6);
-
-	ASSERT(*um_vec_at(v, 0) == 1);
-	ASSERT(*um_vec_at(v, 1) == 2);
-	ASSERT(*um_vec_at(v, 2) == 3);
-	ASSERT(um_vec_get(v, 3) == 4);
-	ASSERT(um_vec_get(v, 4) == 5);
-	ASSERT(um_vec_get(v, 5) == 6);
-
-	ASSERT(head->next->next);
-	ASSERT(!head->next->next->next);
+	ASSERT(*umv_at(v, 0) == 1);
+	ASSERT(*umv_at(v, 1) == 2);
+	ASSERT(*umv_at(v, 2) == 3);
+	ASSERT(umv_get(v, 3) == 4);
+	ASSERT(umv_get(v, 4) == 5);
+	ASSERT(umv_get(v, 5) == 6);
 
 	int sum = 0;
-	um_vec_for(v, it, i) { sum += *it; }
+	umv_each(v, n) { sum += n; }
 	ASSERT(sum == 21);
 
 	sum = 0;
-	um_vec_for_range(v, it, 3, 6) { sum += *it; }
+	umv_loop(v, n, 3, 6) { sum += n; }
 	ASSERT(sum == 15);
 
-	um_vec(int) slice1 = um_vec_slice(v, 2, 5);
+	umv(int) slice1 = umv_slice(v, 2, 5);
 
 	sum = 0;
-	um_vec_for(slice1, it) { sum += *it; }
+	umv_each(slice1, n) { sum += n; }
 
 	ASSERT(sum == 12);
-	ASSERT(um_vec_len(slice1) == 3);
+	ASSERT(umv_len(slice1) == 3);
 
 	PASS();
 }
 
 TEST empty_vec(void)
 {
-	um_vec(int) a = um_vec_alloc(int);
-	ASSERT(um_vec_len(a) == 0);
+	umv(int) a = umv_new(int);
+	ASSERT(umv_len(a) == 0);
 
-	um_vec(int) b = um_vec_slice(a, 0, um_vec_len(a));
-	ASSERT(um_vec_len(b) == 0);
+	umv(int) b = umv_slice(a, 0, umv_len(a));
+	ASSERT(umv_len(b) == 0);
 
 	int sum = 0;
-	um_vec_for(a, np) {
-		sum += *np;
+	umv_each(a, n) {
+		sum += n;
 	}
 	ASSERT(sum == 0);
 
-	um_vec_for_range(a, np, 0, um_vec_len(a)) {
-		sum += *np;
+	umv_loop(a, n, 0, umv_len(a)) {
+		sum += n;
 	}
 	ASSERT(sum == 0);
 
