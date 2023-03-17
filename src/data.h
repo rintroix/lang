@@ -4,7 +4,7 @@
 #include "um/um.h"
 
 #define vec(T) um_vec(T)
-#define avec(V) (um_vec_alloc(V))
+#define avec(T) (um_vec_alloc(T))
 #define push(V, ...) um_vec_push(V, __VA_ARGS__)
 #define vlen(V) (um_vec_len(V))
 #define vat(V, N) (um_vec_at(V, N))
@@ -12,6 +12,17 @@
 #define forv(...) um_vec_for(__VA_ARGS__)
 #define forvr(...) um_vec_for_range(__VA_ARGS__)
 #define vslice(V, START, END) (um_vec_slice(V, START, END))
+
+#define veach(...) um_vec_for(__VA_ARGS__)
+
+#define deq(T) umd(T)
+#define adeq(T) umd_new(T)
+#define deach(...) umd_each(__VA_ARGS__)
+#define dloop(...) umd_loop(__VA_ARGS__)
+#define dget(D, N) umd_get(D, N)
+#define dat(D, N) umd_at(D, N)
+#define dpush(D, X) umd_push(D, X)
+#define dlen(D) umd_len(D)
 
 enum e_type { T_UNKNOWN = 1, T_SIMPLE, T_COMPOUND };
 
@@ -70,7 +81,7 @@ typedef struct function {
 	    .table = (TABLE),                                                  \
 	})
 
-enum e_ast { A_LIST = 1, A_CALL, A_ID, A_OPER, A_BLOCK, A_REF, A_MARK };
+enum e_ast { A_LIST = 1, A_CALL, A_ID, A_OPER, A_BLOCK, A_REF };
 
 enum e_id { I_WORD, I_KW, I_OP, I_INT };
 
@@ -160,5 +171,10 @@ typedef struct scope {
 	vec(type) types;
 	struct scope *next;
 } scope;
+
+typedef struct output {
+	deq(char) declarations;
+	deq(char) definitions;
+} output;
 
 #endif // DATA_H

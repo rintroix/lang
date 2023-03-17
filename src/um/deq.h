@@ -58,6 +58,15 @@
 		(B) = (B)->next;                                               \
 	} while (0)
 
+#define UmDDump(D)                                                             \
+	do {                                                                   \
+		printf("DEQ DUMP for '%s'\n", #D);                             \
+		printf("\tSELF %p CAP %zu LEN %zu\n", UmDHead(D),              \
+		       UmDHead(D)->cap, UmDHead(D)->len);                      \
+		printf("\tBUCKET %p START %zu END %zu\n", UmDBucket(D),        \
+		       UmDBucket(D)->start, UmDBucket(D)->end);                \
+	} while (0)
+
 #define UmDEachN(a, b, c, d, e, f, g, X, ...) UmDEachImp##X
 #define UmDLoopN(a, b, c, d, e, f, g, X, ...) UmDLoopImp##X
 
@@ -97,15 +106,18 @@
 	}
 
 static inline void* umd_alloc(size_t count, size_t one) {
-	_umd_head(char) *mem = malloc(sizeof *mem + one * count);
+	typedef _umd_head(char) t;
+	t *mem = malloc(sizeof *mem + one * count);
 	assert(mem);
-	mem->cap = count;
+	*mem = (t){.cap=count};
 	return mem;
 }
 
 static inline void* _umd_alloc_bucket(size_t count, size_t one) {
-	_umd_bucket(char) *mem = malloc(sizeof *mem + one * count);
+	typedef _umd_bucket(char) t;
+	t *mem = malloc(sizeof *mem + one * count);
 	assert(mem);
+	*mem = (t){0};
 	return mem;
 }
 

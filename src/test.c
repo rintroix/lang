@@ -131,33 +131,33 @@ TEST deqs(void)
 
 TEST strs(void) {
 	char *init = "what's up, hello";
-	ums a = ums_dup_exact(init);
+	umd(char) a = umd_dup_exact(init);
 
 	ASSERT(0 == strncmp(UmDBucket(a)->data, init, strlen(init)));
 
-	ums_append_fmt(a, " world %d", 10);
+	umd_append_fmt(a, " world %d", 10);
 
 	char *result = "what's up, hello world 10";
-	ASSERT(0 == ums_cmp(a, result));
+	ASSERT(0 == umd_cmp(a, result));
 
-	ums s1 = ums_dup_exact("hi");
+	umd(char) s1 = umd_dup_exact("hi");
 
-	ASSERT( 0 == ums_cmp(s1, "hi"));
-	ASSERT(-1 == ums_cmp(s1, "hit"));
-	ASSERT( 1 == ums_cmp(s1, "ha"));
+	ASSERT( 0 == umd_cmp(s1, "hi"));
+	ASSERT(-1 == umd_cmp(s1, "hit"));
+	ASSERT( 1 == umd_cmp(s1, "ha"));
 
-	ums_append_fmt(s1, "X");
-	ums_append_fmt(s1, "Y");
-	ums_append_fmt(s1, "X");
+	umd_append_fmt(s1, "X");
+	umd_append_fmt(s1, "Y");
+	umd_append_fmt(s1, "X");
 
-	ASSERT(0 == ums_cmp(s1, "hiXYX"));
+	ASSERT(0 == umd_cmp(s1, "hiXYX"));
 	ASSERT(UmDCountBuckets(s1) == 4);
 
-	ums s2 = ums_dup_exact("hello  ");
-	ums_append_fmt(s2, "world"); 
-	ums_append_fmt(s2, "!!!");
+	umd(char) s2 = umd_dup_exact("hello  ");
+	umd_append_fmt(s2, "world"); 
+	umd_append_fmt(s2, "!!!");
 
-	ASSERT(0 == ums_cmp(s2, "hello  world!!!"));
+	ASSERT(0 == umd_cmp(s2, "hello  world!!!"));
 	ASSERT(UmDCountBuckets(s2) == 3);
  
 	PASS();

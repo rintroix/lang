@@ -5,6 +5,7 @@
 #include "common.h"
 #include "data.h"
 #include "parser.h"
+#include "um/str.h"
 
 ast *parse(parse_ctx *ctx, typetable *table, ast *a);
 
@@ -117,9 +118,6 @@ int is(ast *a, ast *pat)
 	case A_REF: {
 		todo;
 	} break;
-	case A_MARK: {
-		todo;
-	} break;
 	case A_BLOCK: {
 		todo;
 	} break;
@@ -190,9 +188,6 @@ void cadd(vec(char) out, char *s)
 void _show_ast(vec(char) out, ast *a)
 {
 	switch (a->tag) {
-	case A_MARK: {
-		bug("mark");
-	} break;
 	case A_BLOCK: {
 		todo;
 	} break;
@@ -285,72 +280,6 @@ ast append(ast l, ast a)
 	push(l.list.items, a);
 	return l;
 }
-
-// void compile(tb_list_ref_t context, ast *a)
-// {
-// 	switch (a->tag) {
-// 	case A_FN: {
-// 		printf("%s %s(", a->fn.tag, a->fn.name);
-// 		printf(") {\n");
-// 		ast *body = a->fn.body;
-// 		tb_assert(body->block.items);
-// 		tb_for_all(ast *, item, body->block.items)
-// 		{
-// 			compile(context, item);
-// 			puts(";");
-// 		}
-// 		printf("}");
-// 		puts("");
-// 	} break;
-
-// 	case A_LIST: {
-// 		bug("%s: bare list", __func__);
-// 	} break;
-
-// 	case A_CALL: {
-// 		printf("%s(", a->call.name);
-// 		tb_for_all(ast *, arg, a->call.args)
-// 		{
-// 			if (arg != tb_iterator_item(a->call.args, 0))
-// 				printf(", ");
-// 			compile(context, arg);
-// 		}
-// 		printf(")");
-// 	} break;
-
-// 	case A_REF:
-// 		todo;
-// 		break;
-
-// 	case A_DEF:
-// 		todo;
-// 		break;
-
-// 	case A_ID:
-// 		bug("%s: id %s", __func__, a->id.name);
-// 		break;
-
-// 	case A_OPER:
-// 		printf("(");
-// 		printf(" ");
-// 		compile(context, a->oper.left);
-// 		printf(" ");
-// 		printf("%s", a->oper.name);
-// 		printf(" ");
-// 		compile(context, a->oper.left);
-// 		printf(" ");
-// 		printf(")");
-// 		break;
-
-// 	case A_BLOCK:
-// 		todo;
-// 		break;
-
-// 	case A_MARK:
-// 		bug("%s: mark", __func__);
-// 		break;
-// 	}
-// }
 
 type list2type(vec(ast) items, size_t start, size_t end)
 {
@@ -677,9 +606,6 @@ ast *parse(parse_ctx *ctx, typetable *table, ast *a)
 	case A_CALL: {
 		bug("call");
 	} break;
-	case A_MARK: {
-		bug("mark");
-	} break;
 	case A_LIST: {
 		return (parse_list(ctx, table, a->list.items));
 	} break;
@@ -755,41 +681,56 @@ type unify_types(type a, type b)
 	bug("unreachable");
 }
 
-void compile_ast(typetable *table, ast *a, int indent)
+__attribute__((format(printf, 2, 3))) void odec(output *o,
+						const char *restrict fmt, ...)
+{
+	va_list base;
+	va_start(base, fmt);
+	check(0 <= umd_append_vfmt(o->declarations, fmt, base));
+	va_end(base);
+}
+
+__attribute__((format(printf, 2, 3))) void odef(output *o,
+						const char *restrict fmt, ...)
+{
+	va_list base;
+	va_start(base, fmt);
+	check(0 <= umd_append_vfmt(o->definitions, fmt, base));
+	va_end(base);
+}
+
+void compile_ast(output *o, typetable *table, ast *a, int indent)
 {
 	bug_if_not(a);
 
 	switch (a->tag) {
-	case A_MARK: {
-		bug("mark");
-	} break;
 	case A_BLOCK: {
-		printf("%*s{\n", indent, "");
+		odef(o, "%*s{\n", indent, "");
 		forv(a->block.items, item)
 		{
-			compile_ast(table, item, indent + 2);
+			compile_ast(o, table, item, indent + 2);
 		}
-		printf("%*s}\n", indent, "");
+		odef(o, "%*s}\n", indent, "");
 	} break;
 	case A_REF: {
-		printf("%s", a->ref.def->name);
+		odef(o, "%s", a->ref.def->name);
 	} break;
 	case A_LIST: {
 		bug("list");
 	} break;
 	case A_CALL: {
 		if (indent)
-			printf("%*s", indent, "");
-		printf("%s(", a->call.name);
+			odef(o, "%*s", indent, "");
+		odef(o, "%s(", a->call.name);
 		forv(a->call.args, arg, i)
 		{
 			if (i)
-				printf(", ");
-			compile_ast(table, arg, 0);
+				odef(o, ", ");
+			compile_ast(o, table, arg, 0);
 		}
-		printf(")");
+		odef(o, ")");
 		if (indent)
-			printf(";\n");
+			odef(o, ";\n");
 	} break;
 
 	case A_ID: {
@@ -800,7 +741,7 @@ void compile_ast(typetable *table, ast *a, int indent)
 		if (a->id.tag == I_WORD)
 			bug("word");
 		if (a->id.tag == I_INT)
-			printf("%s", a->id.name);
+			odef(o, "%s", a->id.name);
 	} break;
 
 	case A_OPER: {
@@ -809,21 +750,29 @@ void compile_ast(typetable *table, ast *a, int indent)
 	}
 }
 
-void compile_one(parse_ctx *ctx, typetable *table, function *fun)
+void compile_fn(parse_ctx *ctx, output *o, typetable *table, function *fun)
 {
-	printf("%s %s(", show_type(get_ret_type(table)), fun->self.name);
-	forv(fun->args, arg, i)
+	char *ret = show_type(get_ret_type(table));
+	char *name = fun->self.name;
+
+	odec(o, "%s %s(", ret, name);
+	odef(o, "%s %s(", ret, name);
+
+	veach(fun->args, arg, i)
 	{
 		if (i != 0)
-			printf(" ,");
-		printf("%s %s", show_type(get_arg_type(table, i)), arg->name);
+			odec(o, ", "), odef(o, ", ");
+		char *tname = show_type(get_arg_type(table, i));
+		odec(o, "%s %s", tname, arg->name);
+		odef(o, "%s %s", tname, arg->name);
 	}
-	printf(") {\n");
-	compile_ast(table, fun->self.init, 2);
-	printf("}\n");
+	odec(o, ");\n");
+	odef(o, ") {\n");
+	compile_ast(o, table, fun->self.init, 2);
+	odef(o, "}\n");
 }
 
-void compile(parse_ctx *ctx, typetable *table, callreq *req)
+void compile(parse_ctx *ctx, output *o, typetable *table, callreq *req)
 {
 	vec(function *) candidates = find_candidates(ctx, table, req->name);
 
@@ -843,7 +792,7 @@ void compile(parse_ctx *ctx, typetable *table, callreq *req)
 		*argp = unify_types(*argp, get_arg_type(table, i));
 	}
 
-	compile_one(ctx, &unitable, f);
+	compile_fn(ctx, o, &unitable, f);
 }
 
 int main(int argc, char **argv)
@@ -875,7 +824,14 @@ int main(int argc, char **argv)
 	callreq mainreq =
 	    (callreq){.name = "main", .ret = mainret, .args = mainargs};
 
-	compile(&topctx, &maintable, &mainreq);
+	output o = (output){
+	    .declarations = adeq(char),
+	    .definitions = adeq(char),
+	};
+	compile(&topctx, &o, &maintable, &mainreq);
+
+	printf("%s\n", umd_to_cstr(o.declarations));
+	printf("%s\n", umd_to_cstr(o.definitions));
 
 	log("END");
 }
