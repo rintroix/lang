@@ -38,14 +38,7 @@ typedef struct type {
 	};
 } type;
 
-typedef struct define {
-	char *name;
-	size_t index;
-	ast *init;
-} define;
-
-#define def(NAME, INDEX, INIT)                                                  \
-	((define){.name = NAME, .index = (INDEX), .init = (INIT)})
+typedef struct define define;
 
 typedef struct callreq {
 	char *name;
@@ -68,12 +61,6 @@ typedef struct typetable {
 	vec(opreq) ops;
 } typetable;
  
-typedef struct function {
-	define self;
-	vec(define) args;
-	typetable table;
-} function;
-
 #define fn(DEF, ARGS, TABLE)                                                   \
 	((function){                                                           \
 	    .self = (DEF),                                                     \
@@ -86,9 +73,9 @@ enum e_ast { A_LIST = 1, A_CALL, A_ID, A_OPER, A_BLOCK, A_REF };
 enum e_id { I_WORD, I_KW, I_OP, I_INT };
 
 typedef struct block {
-	vec(function) functions;
-	vec(define) defines;
-	vec(ast) items;
+	vec(struct function) functions;
+	vec(struct define) defines;
+	vec(struct ast) items;
 } block;
 
 struct ast {
@@ -125,6 +112,21 @@ struct ast {
 	};
 };
 
+struct define {
+	char *name;
+	size_t index;
+	ast init;
+};
+
+typedef struct function {
+	define self;
+	vec(define) args;
+	typetable table;
+} function;
+
+#define def(NAME, INDEX, INIT)                                                 \
+	((define){.name = NAME, .index = (INDEX), .init = (INIT)})
+
 #define aop(NAME) ((ast){.tag = A_ID, .id = {.name = (NAME), .tag = I_OP}})
 
 #define akw(NAME) ((ast){.tag = A_ID, .id = {.name = (NAME), .tag = I_KW}})
@@ -149,32 +151,40 @@ struct ast {
 #define K(x) &akw(x)
 #define O(x) &aop(x)
 
-ast alist0();
-ast alist1(ast a);
-ast append(ast l, ast a);
-void printl_ast(ast *t);
-
 typedef struct macro {
 	char *name;
 } macro;
 
-typedef struct parse_ctx {
+typedef struct context {
 	vec(define) defines;
 	vec(macro) macros;
 	vec(function) functions;
-	struct parse_ctx *next;
-} parse_ctx;
-
-typedef struct scope {
-	vec(function) functions;
-	vec(struct let) lets;
-	vec(type) types;
-	struct scope *next;
-} scope;
+	struct context *next;
+} context;
 
 typedef struct output {
 	deq(char) declarations;
 	deq(char) definitions;
 } output;
+
+static inline ast alist0()
+{
+	vec(ast) items = avec(ast);
+	return alist(items);
+}
+
+static inline ast alist1(ast a)
+{
+	vec(ast) items = avec(ast);
+	push(items, a);
+	return alist(items);
+}
+
+static inline ast append(ast l, ast a)
+{
+	assert(l.tag == A_LIST);
+	push(l.list.items, a);
+	return l;
+}
 
 #endif // DATA_H

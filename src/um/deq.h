@@ -22,14 +22,7 @@
 		T data[];                                                      \
 	}
 
-#define _umd_generic_head                                                      \
-	struct {                                                               \
-		size_t cap;                                                    \
-		size_t len;                                                    \
-		_umd_bucket(char) bucket;                                      \
-	}
-
-#define umd(T) T****
+#define umd(T) T***
 #define umd_new_manual(T, N) ((umd(T))umd_alloc(N, sizeof(T)))
 #define umd_new(T) umd_new_manual(T, UM_DEQ_BUCKET_SIZE / sizeof(T))
 #define umd_len(D) (UmDHead(D)->len)
@@ -39,15 +32,13 @@
 #define umd_each(...) UmDEachN(__VA_ARGS__, H, H, H, H, I, N, L, L)(__VA_ARGS__)
 #define umd_loop(...) UmDLoopN(__VA_ARGS__, H, H, I, N, L, L, L, L)(__VA_ARGS__)
 
-#define UmDCover(D) umd(UmDItemT) 
-#define UmDItem(D) ****D
+#define _umd(D) umd(UmDItemT(D)) 
+#define UmDItem(D) ***D
 #define UmDItemT(D) __typeof__(UmDItem(D))
 #define UmDItemS(D) sizeof(UmDItemT(D))
-#define UmDGHeadT(D) _umd_head(char)
 #define UmDHeadT(D) _umd_head(UmDItemT(D))
 #define UmDHeadS(D) sizeof(UmDHeadT(D))
 #define UmDHead(D) ((UmDHeadT(D) *)(D))
-#define UmDGHead(D) ((UmDGHeadT(D) *)(D))
 #define UmDBucketT(D) _umd_bucket(UmDItemT(D))
 #define UmDBucket(D) (&(UmDHead(D)->bucket))
 #define UmDCountBuckets(D) _umd_count_buckets(UmDBucket(D))
@@ -79,12 +70,12 @@
 #define UmDEachImpI(D, NAME, INDEX)                                             \
 	UmDEachImp(D, NAME, UmGen(_b), UmGen(_o), (INDEX), UmGen(_c))
 
-// C count withing bucket
-// I overall index
-// O sentinel
-// B bucket
-// N name
 // D self
+// N name
+// B bucket
+// O sentinel
+// I overall index
+// C bucket index
 #define UmDEachImp(D, N, B, O, I, C)                                           \
 	for (int(O) = 1, (C) = 0, (I) = 0; (O); (O) = 0)                       \
 		for (UmDItemT(D)(N); (O); (O) = 0)                             \
