@@ -10,7 +10,7 @@
 #define ums_new() umd_new(char)
 #define ums_new_manual(N) umd_new_manual(char, N)
 
-static inline ums ums_dup(char* s)  {
+static inline ums ums_dup_exact(char* s)  {
 	size_t len = strlen(s);
 	ums out = ums_new_manual(len);
 	memcpy(UmDBucket(out)->data, s, len); 
@@ -47,11 +47,8 @@ static inline int ums_append_fmt(ums xs, const char *restrict fmt, ...) {
 			assert(0 && "fixme: need bigger buckets");
 		}
 
-		assert(!b->next);
-		b->next = _umd_alloc_bucket(cap, one); // TODO api
-		b = b->next;
+		UmDAddBucket(b, cap, one);
 
-		assert(b->end == 0);
 		written = vsnprintf(((char *)b->data), cap, fmt, clone);
 
 		if (written < 0)
@@ -69,7 +66,7 @@ cleanup:
 }
 
 static inline int ums_cmp(ums xs, const char *restrict s) {
-	umd_for(xs, c, i) {
+	umd_each(xs, c, i) {
 		if (c != *s)
 			return c > *s ? 1 : -1;
 		s++;
@@ -80,7 +77,7 @@ static inline int ums_cmp(ums xs, const char *restrict s) {
 
 static inline char* ums_to_cstr(ums xs) {
 	char *out = malloc(umd_len(xs) + 1);
-	umd_for(xs, c, i) {
+	umd_each(xs, c, i) {
 		out[i] = c;
 	}
 	out[umd_len(xs)] = '\0';

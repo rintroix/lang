@@ -22,6 +22,13 @@
 		T data[];                                                      \
 	}
 
+#define _umd_generic_head                                                      \
+	struct {                                                               \
+		size_t cap;                                                    \
+		size_t len;                                                    \
+		_umd_bucket(char) bucket;                                      \
+	}
+
 #define umd(T) T****
 #define umd_new_manual(T, N) ((umd(T))umd_alloc(N, sizeof(T)))
 #define umd_new(T) umd_new_manual(T, UM_DEQ_BUCKET_SIZE / sizeof(T))
@@ -29,32 +36,39 @@
 #define umd_at(D, I) ((UmDItemT(D)*)_umd_at(UmDHead(D), UmDItemS(D), I))
 #define umd_get(D, I) (*umd_at(D, I))
 #define umd_push(D, X) _umd_push(UmDHead(D), &(__typeof__(X)){X}, UmDItemS(D))
-#define umd_for(...) UmDForN(__VA_ARGS__, H, H, H, H, I, N, L, L)(__VA_ARGS__)
-#define umd_for_range(...)                                                     \
-	UmDForRN(__VA_ARGS__, H, H, I, N, L, L, L, L)(__VA_ARGS__)
+#define umd_each(...) UmDEachN(__VA_ARGS__, H, H, H, H, I, N, L, L)(__VA_ARGS__)
+#define umd_loop(...) UmDLoopN(__VA_ARGS__, H, H, I, N, L, L, L, L)(__VA_ARGS__)
 
 #define UmDCover(D) umd(UmDItemT) 
 #define UmDItem(D) ****D
 #define UmDItemT(D) __typeof__(UmDItem(D))
 #define UmDItemS(D) sizeof(UmDItemT(D))
+#define UmDGHeadT(D) _umd_head(char)
 #define UmDHeadT(D) _umd_head(UmDItemT(D))
 #define UmDHeadS(D) sizeof(UmDHeadT(D))
-#define UmDHead(D) ((UmDHeadT(D)*)(((char*)UmDBucket(D)) - offsetof(UmDHeadT(D), bucket)))
+#define UmDHead(D) ((UmDHeadT(D) *)(D))
+#define UmDGHead(D) ((UmDGHeadT(D) *)(D))
 #define UmDBucketT(D) _umd_bucket(UmDItemT(D))
-#define UmDBucket(D) ((UmDBucketT(D)*)(((char*)D) - offsetof(UmDBucketT(D), data)))
+#define UmDBucket(D) (&(UmDHead(D)->bucket))
 #define UmDCountBuckets(D) _umd_count_buckets(UmDBucket(D))
+#define UmDAddBucket(B, CAP, ONE)                                              \
+	do {                                                                   \
+		assert(!(B)->next);                                            \
+		(B)->next = _umd_alloc_bucket(CAP, ONE);                       \
+		(B) = (B)->next;                                               \
+	} while (0)
 
-#define UmDForN(a, b, c, d, e, f, g, X, ...) UmDForImp##X
-#define UmDForRN(a, b, c, d, e, f, g, X, ...) UmDForRImp##X
+#define UmDEachN(a, b, c, d, e, f, g, X, ...) UmDEachImp##X
+#define UmDLoopN(a, b, c, d, e, f, g, X, ...) UmDLoopImp##X
 
-#define UmDForImpL(...) UmE("umd_for: not enough arguments")
-#define UmDForImpH(...) UmE("umd_for: too many arguments")
-#define UmDForRImpL(...) UmE("umd_for_range: not enough arguments")
-#define UmDForRImpH(...) UmE("umd_for_range: too many arguments")
-#define UmDForImpN(D, NAME)                                                    \
-	UmDForImp(D, NAME, UmGen(_b), UmGen(_o), UmGen(_i), UmGen(_c))
-#define UmDForImpI(D, NAME, INDEX)                                             \
-	UmDForImp(D, NAME, UmGen(_b), UmGen(_o), (INDEX), UmGen(_c))
+#define UmDEachImpL(...) UmE("umd_each: not enough arguments")
+#define UmDEachImpH(...) UmE("umd_each: too many arguments")
+#define UmDLoopImpL(...) UmE("umd_loop: not enough arguments")
+#define UmDLoopImpH(...) UmE("umd_loop: too many arguments")
+#define UmDEachImpN(D, NAME)                                                    \
+	UmDEachImp(D, NAME, UmGen(_b), UmGen(_o), UmGen(_i), UmGen(_c))
+#define UmDEachImpI(D, NAME, INDEX)                                             \
+	UmDEachImp(D, NAME, UmGen(_b), UmGen(_o), (INDEX), UmGen(_c))
 
 // C count withing bucket
 // I overall index
@@ -62,7 +76,7 @@
 // B bucket
 // N name
 // D self
-#define UmDForImp(D, N, B, O, I, C)                                            \
+#define UmDEachImp(D, N, B, O, I, C)                                           \
 	for (int(O) = 1, (C) = 0, (I) = 0; (O); (O) = 0)                       \
 		for (UmDItemT(D)(N); (O); (O) = 0)                             \
 			for (UmDBucketT(D) * (B) = (void *)UmDBucket(D); (B);  \
@@ -83,14 +97,14 @@
 	}
 
 static inline void* umd_alloc(size_t count, size_t one) {
-	_umd_head(int) *mem = malloc(sizeof *mem + one * count);
+	_umd_head(char) *mem = malloc(sizeof *mem + one * count);
 	assert(mem);
 	mem->cap = count;
-	return &mem->bucket.data;
+	return mem;
 }
 
 static inline void* _umd_alloc_bucket(size_t count, size_t one) {
-	_umd_bucket(int) *mem = malloc(sizeof *mem + one * count);
+	_umd_bucket(char) *mem = malloc(sizeof *mem + one * count);
 	assert(mem);
 	return mem;
 }
@@ -109,8 +123,8 @@ static inline size_t _umd_count_buckets(void *vbucket) {
 static inline size_t _umd_push(void *vhead, void *src, size_t one)
 {
 	assert(vhead);
-	_umd_head(int) *h = vhead;
-	_umd_bucket(int) *b = (void*)&h->bucket; // c23
+	_umd_head(char) *h = vhead;
+	_umd_bucket(char) *b = (void*)&h->bucket; // c23
 
 	size_t cap = h->cap;
 
@@ -126,8 +140,8 @@ static inline size_t _umd_push(void *vhead, void *src, size_t one)
 static inline void *_umd_at(void *vhead, size_t one, size_t index)
 {
 	assert(vhead);
-	_umd_head(int) *h = vhead;
-	_umd_bucket(int) *b = (void*)&h->bucket; // c23
+	_umd_head(char) *h = vhead;
+	_umd_bucket(char) *b = (void*)&h->bucket; // c23
 
 	assert(index < h->len);
 

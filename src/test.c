@@ -1,7 +1,6 @@
 #include "greatest.h"
 #include "um/um.h"
 
-/* A test runs various assertions, then calls PASS(), FAIL(), or SKIP(). */
 TEST vecs(void)
 {
 	um_vec(int) v = um_vec_alloc_manual(int, 2);
@@ -97,7 +96,7 @@ TEST deqs(void)
 	ASSERT(umd_len(a) == 5);
 
 	int suma = 0;
-	umd_for(a, n) {
+	umd_each(a, n) {
 		suma += n;	
 	}
 
@@ -121,7 +120,7 @@ TEST deqs(void)
 	ASSERT(umd_get(b, 2) == &i3);
 
 	int sumb = 0;
-	umd_for(b, n) {
+	umd_each(b, n) {
 		sumb += *n;	
 	}
 
@@ -132,7 +131,7 @@ TEST deqs(void)
 
 TEST strs(void) {
 	char *init = "what's up, hello";
-	ums a = ums_dup(init);
+	ums a = ums_dup_exact(init);
 
 	ASSERT(0 == strncmp(UmDBucket(a)->data, init, strlen(init)));
 
@@ -141,7 +140,7 @@ TEST strs(void) {
 	char *result = "what's up, hello world 10";
 	ASSERT(0 == ums_cmp(a, result));
 
-	ums s1 = ums_dup("hi");
+	ums s1 = ums_dup_exact("hi");
 
 	ASSERT( 0 == ums_cmp(s1, "hi"));
 	ASSERT(-1 == ums_cmp(s1, "hit"));
@@ -154,7 +153,7 @@ TEST strs(void) {
 	ASSERT(0 == ums_cmp(s1, "hiXYX"));
 	ASSERT(UmDCountBuckets(s1) == 4);
 
-	ums s2 = ums_dup("hello  ");
+	ums s2 = ums_dup_exact("hello  ");
 	ums_append_fmt(s2, "world"); 
 	ums_append_fmt(s2, "!!!");
 
