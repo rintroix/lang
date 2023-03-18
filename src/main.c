@@ -659,21 +659,18 @@ void compile_ast(output *o, typetable *table, flags fl, ast a, int indent)
 {
 	switch (a.tag) {
 	case A_BLOCK: {
-		int sub = indent + 2;
+			size_t len = vlen(a.block.items);
+		bug_if(len == 0);
+		int sub = indent;
 		if (!a.block.after_block) {
 			odef(o, "%*s{\n", indent, "");
-		} else {
-			sub = indent;
+			sub = indent + 2;
 		}
-		// TODO range loop
-		veach(a.block.items, item, i)
+		vloop(a.block.items, item, 0, len - 1, i)
 		{
-			if (i + 1 == vlen(a.block.items)) {
-				compile_ast(o, table, fl, item, sub);
-			} else {
-				compile_ast(o, table, noret(fl), item, sub);
-			}
+			compile_ast(o, table, noret(fl), item, sub);
 		}
+		compile_ast(o, table, fl, vget(a.block.items, len - 1), sub);
 		if (!a.block.after_block) {
 			odef(o, "%*s}\n", indent, "");
 		}
