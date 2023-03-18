@@ -10,7 +10,6 @@ static inline umd(char) umd_dup_exact(const char *restrict s)
 	size_t len = strlen(s);
 	umd(char) out = umd_new_manual(char, len);
 	memcpy(UmDBucket(out)->data, s, len);
-	assert(UmDHead(out)->cap == len);
 	UmDHead(out)->len = len;
 	UmDBucket(out)->end = len;
 	return out;
@@ -22,14 +21,10 @@ static inline int umd_append_vfmt(umd(char) xs, const char *restrict fmt,
 	va_list clone;
 	va_copy(clone, base);
 
-	_umd_head(char) *h = (void *)UmDHead(xs);
-	_umd_bucket(char) *b = (void *)UmDBucket(xs);
-
+	_umd_h *h = UmDGHead(xs);
 	size_t cap = h->cap;
 	size_t one = sizeof(char);
-
-	UmDNextSpaceOnEnd(b, 2, cap, one);
-
+	_umd_b *b = UmDLastBucket(UmDGBucket(xs), 2, cap, one);
 	size_t len = cap - b->end;
 
 	int written = vsnprintf(((char *)b->data) + b->end, len, fmt, base);

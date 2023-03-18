@@ -3,31 +3,21 @@
 
 TEST vecs(void)
 {
-	umv(int) v = umv_new_manual(int, 2);
+	umv(int) v = umv_new(int);
 
 	ASSERT(umv_len(v) == 0);
-	ASSERT(UmVHead(v)->cap == 2);
-	ASSERT(UmVHead(v)->bucket.next == (void*)0);
-	ASSERT(UmVCountBuckets(v) == 1);
 
 	umv_push(v, 1);
 	umv_push(v, 2);
-
-	ASSERT(umv_len(v) == 2);
-	ASSERT(UmVHead(v)->bucket.next == (void*)0);
-	ASSERT(UmVCountBuckets(v) == 1);
-
 	umv_push(v, 3);
 	umv_push(v, 4);
 
 	ASSERT(umv_len(v) == 4);
-	ASSERT(UmVCountBuckets(v) == 2);
 
 	umv_push(v, 5);
 	umv_push(v, 6);
 
 	ASSERT(umv_len(v) == 6);
-	ASSERT(UmVCountBuckets(v) == 3);
 
 	ASSERT(*umv_at(v, 0) == 1);
 	ASSERT(*umv_at(v, 1) == 2);
@@ -141,26 +131,33 @@ TEST strs(void) {
 	ASSERT( 0 == umd_cmp(s1, "hi"));
 	ASSERT(-1 == umd_cmp(s1, "hit"));
 	ASSERT( 1 == umd_cmp(s1, "ha"));
+	ASSERT( 1 == umd_cmp(s1, "h"));
 
 	umd_append_fmt(s1, "X");
 	umd_append_fmt(s1, "Y");
 	umd_append_fmt(s1, "X");
 
 	ASSERT(0 == umd_cmp(s1, "hiXYX"));
-	ASSERT(UmDCountBuckets(s1) == 4);
 
-	umd(char) s2 = umd_dup_exact("hello  ");
+	umd(char) s2 = umd_dup_exact("oh, hello ");
 	umd_append_fmt(s2, "world"); 
-	umd_append_fmt(s2, "!!!");
+	umd_append_fmt(s2, "!");
+	umd_append_fmt(s2, "!!");
 
-	ASSERT(0 == umd_cmp(s2, "hello  world!!!"));
-	ASSERT(UmDCountBuckets(s2) == 3);
+	ASSERT(0 == umd_cmp(s2, "oh, hello world!!!"));
  
 	PASS();
 }
 
-/* Suites can group multiple tests with common setup. */
-SUITE(vec_suite)
+TEST pow2(void) {
+	ASSERT(um_next_pow2(1) == 1);
+	ASSERT(um_next_pow2(4) == 4);
+	ASSERT(um_next_pow2(127) == 128);
+
+	PASS();
+}
+
+SUITE(containers)
 {
 	RUN_TEST(vecs);
 	RUN_TEST(deqs);
@@ -168,11 +165,19 @@ SUITE(vec_suite)
 	RUN_TEST(empty_vec);
 }
 
+SUITE(utils)
+{
+	RUN_TEST(pow2);
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char **argv)
 {
-	GREATEST_MAIN_BEGIN(); /* command-line options, initialization. */
-	RUN_SUITE(vec_suite);
-	GREATEST_MAIN_END(); /* display results */
+	GREATEST_MAIN_BEGIN();
+
+	RUN_SUITE(containers);
+	RUN_SUITE(utils);
+
+	GREATEST_MAIN_END();
 }

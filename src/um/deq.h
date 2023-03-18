@@ -3,8 +3,8 @@
 
 #include "um/common.h"
 
-#ifndef UM_DEQ_BUCKET_SIZE
-#define UM_DEQ_BUCKET_SIZE 128
+#ifndef UMD_SIZE
+#define UMD_SIZE UM_CHUNK_SIZE
 #endif
 
 #define _umd_head(T)                                                           \
@@ -22,26 +22,47 @@
 		T data[];                                                      \
 	}
 
-#define umd(T) T*****
+typedef struct _umd_b {
+	size_t start;
+	size_t end;
+	struct _umd_b *next;
+	char data[];
+} _umd_b;
+
+typedef struct _umd_h {
+	size_t cap;
+	size_t len;
+	_umd_b bucket;
+} _umd_h;
+
+_Static_assert(sizeof(_umd_h) == sizeof(_umd_head(char)), "head");
+_Static_assert(sizeof(_umd_b) == sizeof(_umd_bucket(char)), "bucket");
+
+#define umd(T) T *****
 #define umd_new_manual(T, N) ((umd(T))umd_alloc(N, sizeof(T)))
-#define umd_new(T) umd_new_manual(T, UM_DEQ_BUCKET_SIZE / sizeof(T))
+#define umd_new(T) umd_new_manual(T, UMD_SIZE)
 #define umd_len(D) (UmDHead(D)->len)
-#define umd_at(D, I) ((UmDItemT(D)*)_umd_at(UmDHead(D), UmDItemS(D), I))
+#define umd_at(D, I) ((UmDItemT(D) *)_umd_at(UmDGHead(D), UmDItemS(D), I))
 #define umd_get(D, I) (*umd_at(D, I))
-#define umd_push(D, X) _umd_push(UmDHead(D), &(__typeof__(X)){X}, UmDItemS(D))
 #define umd_each(...) UmDEachN(__VA_ARGS__, H, H, H, H, I, N, L, L)(__VA_ARGS__)
 #define umd_loop(...) UmDLoopN(__VA_ARGS__, H, H, I, N, L, L, L, L)(__VA_ARGS__)
+#define umd_push(D, ...)                                                       \
+	(*(UmDItemT(D) *)_umd_push_at(UmDGHead(D), UmDItemS(D)) =              \
+	     (__VA_ARGS__),                                                    \
+	 umd_len(D) - 1)
 
-#define _umd(D) umd(UmDItemT(D)) 
+#define UmD(D) umd(UmDItemT(D))
 #define UmDItem(D) *****D
 #define UmDItemT(D) __typeof__(UmDItem(D))
 #define UmDItemS(D) sizeof(UmDItemT(D))
 #define UmDHeadT(D) _umd_head(UmDItemT(D))
 #define UmDHeadS(D) sizeof(UmDHeadT(D))
 #define UmDHead(D) ((UmDHeadT(D) *)(D))
+#define UmDGHead(D) ((_umd_h *)(D))
 #define UmDBucketT(D) _umd_bucket(UmDItemT(D))
 #define UmDBucket(D) (&(UmDHead(D)->bucket))
-#define UmDCountBuckets(D) _umd_count_buckets(UmDBucket(D))
+#define UmDGBucket(D) ((_umd_b*)(UmDBucket(D)))
+#define UmDCountBuckets(D) _umd_count_buckets(UmDGBucket(D))
 #define UmDAddBucket(B, CAP, ONE)                                              \
 	do {                                                                   \
 		assert(!(B)->next);                                            \
@@ -65,9 +86,9 @@
 #define UmDEachImpH(...) UmE("umd_each: too many arguments")
 #define UmDLoopImpL(...) UmE("umd_loop: not enough arguments")
 #define UmDLoopImpH(...) UmE("umd_loop: too many arguments")
-#define UmDEachImpN(D, NAME)                                                    \
+#define UmDEachImpN(D, NAME)                                                   \
 	UmDEachImp(D, NAME, UmGen(_b), UmGen(_o), UmGen(_i), UmGen(_c))
-#define UmDEachImpI(D, NAME, INDEX)                                             \
+#define UmDEachImpI(D, NAME, INDEX)                                            \
 	UmDEachImp(D, NAME, UmGen(_b), UmGen(_o), (INDEX), UmGen(_c))
 
 // D self
@@ -85,39 +106,48 @@
 				     (C) < (B)->end;                           \
 				     (C)++, (I)++, (N) = (B)->data[C])
 
-#define UmDNextSpaceOnEnd(B, N, CAP, ONE)                                      \
-	while ((B)->end + (N) > (CAP)) {                                       \
-		if ((B)->next) {                                               \
-			(B) = (B)->next;                                       \
-		} else {                                                       \
-			(B)->next = _umd_alloc_bucket(CAP, ONE);               \
-			(B) = (B)->next;                                       \
-			break;                                                 \
-		}                                                              \
+// B bucket
+// N amount of free items needed
+#define UmDLastBucket(B, N, CAP, ONE)                                          \
+	(__typeof__(B))_umd_last_bucket((_umd_b *)B, N, CAP, ONE)
+
+static inline _umd_h *umd_alloc(size_t count, size_t one)
+{
+	size_t size = um_next_pow2(sizeof(_umd_h) + one * count);
+	size_t cap = (size - sizeof(_umd_h)) / one;
+	_umd_h *mem = malloc(size);
+	assert(mem);
+	*mem = (_umd_h){.cap = cap};
+	return mem;
+}
+
+static inline _umd_b *_umd_alloc_bucket(size_t cap, size_t one)
+{
+	_umd_b *mem = malloc(sizeof *mem + one * cap);
+	assert(mem);
+	*mem = (_umd_b){0};
+	return mem;
+}
+
+static inline _umd_b *_umd_last_bucket(_umd_b *b, size_t n, size_t cap,
+				       size_t one)
+{
+	assert(n <= cap);
+
+	while (b->next)
+		b = b->next;
+
+	if (b->end + n > cap) {
+		b->next = _umd_alloc_bucket(cap, one);
+		b = b->next;
 	}
 
-// TODO do while
-// TODO addbucket api
-
-static inline void* umd_alloc(size_t count, size_t one) {
-	typedef _umd_head(char) t;
-	t *mem = malloc(sizeof *mem + one * count);
-	assert(mem);
-	*mem = (t){.cap=count};
-	return mem;
+	return b;
 }
 
-static inline void* _umd_alloc_bucket(size_t count, size_t one) {
-	typedef _umd_bucket(char) t;
-	t *mem = malloc(sizeof *mem + one * count);
-	assert(mem);
-	*mem = (t){0};
-	return mem;
-}
-
-static inline size_t _umd_count_buckets(void *vbucket) {
+static inline size_t _umd_count_buckets(_umd_b *b)
+{
 	size_t n = 0;
-	_umd_bucket(int) *b = vbucket;
 
 	for (; b; b = b->next) {
 		n++;
@@ -126,28 +156,10 @@ static inline size_t _umd_count_buckets(void *vbucket) {
 	return n;
 }
 
-static inline size_t _umd_push(void *vhead, void *src, size_t one)
+static inline void *_umd_at(_umd_h *h, size_t one, size_t index)
 {
-	assert(vhead);
-	_umd_head(char) *h = vhead;
-	_umd_bucket(char) *b = (void*)&h->bucket; // c23
-
-	size_t cap = h->cap;
-
-	UmDNextSpaceOnEnd(b, 1, cap, one);
-
-	memcpy(((char *)b->data) + one * b->end, src, one);
-	b->end++;
-
-	return h->len++;
-}
-
-
-static inline void *_umd_at(void *vhead, size_t one, size_t index)
-{
-	assert(vhead);
-	_umd_head(char) *h = vhead;
-	_umd_bucket(char) *b = (void*)&h->bucket; // c23
+	assert(h);
+	_umd_b *b = &h->bucket;
 
 	assert(index < h->len);
 
@@ -159,69 +171,13 @@ static inline void *_umd_at(void *vhead, size_t one, size_t index)
 	return ((char *)b->data) + b->start + one * index;
 }
 
-#if 0
-
-#define UmVFor(a, b, c, d, e, f, g, X, ...) _um_vec_for##X
-#define UmVForR(a, b, c, d, e, f, g, X, ...) _um_vec_for_range##X
-
-#define _um_vec_for_range_d(V, NAME, START, END)                               \
-	_um_vec_for_range(V, NAME, UmGen(_h), UmGen(_o), UmGen(_i), UmGen(_c), \
-			  UmGen(_f), UmGen(_s), (START), UmGen(_e), (END))
-#define _um_vec_for_range_i(V, NAME, START, END, INDEX)                        \
-	_um_vec_for_range(V, NAME, UmGen(_h), UmGen(_o), (INDEX), UmGen(_c),   \
-			  UmGen(_f), UmGen(_s), (START), UmGen(_e), (END))
-
-#define _um_vec_for_range(V, N, H, O, I, C, F, S, SI, E, EI)                   \
-	for (int(O) = 1, (F), (C), (I) = 0, (S) = (SI), (E) = (EI); O;         \
-	     (O) = 0)                                                          \
-		for (UmVType1(V) * (N); (O); (O) = 0)                          \
-			for (um_vec_h * (H) =                                  \
-				 UmVRewind(UmVHead(V), &(S), &(E));            \
-			     (O) && (H); (H) = (H)->next)                      \
-				for ((C) = (S), (S) = 0,                       \
-				    (N) = UmVData(V, H) + (C),                 \
-				    (F) = (E) <= (H)->count ? ((O) = 0, (E))   \
-							    : (H)->count;      \
-				     (C) < (F);                                \
-				     (C)++, (I)++, (N) = UmVData(V, H) + (C))
-
-static inline char *_um_vec_slice(um_vec_h *head, size_t one, size_t start,
-				  size_t end)
+static inline void *_umd_push_at(_umd_h *h, size_t one)
 {
-	_um_vec_verify(head);
-	assert(end >= start);
+	assert(h);
+	_umd_b *b = UmDLastBucket(&h->bucket, 1, h->cap, one);
 
-	while (start && start >= head->count) {
-		start -= head->count;
-		end -= head->count;
-		head = head->next;
-	}
-
-	um_vec_h *out = UmVHead(_um_vec_alloc(head->alloc, 0));
-	_um_vec_verify(out);
-
-	// TODO optimize memcpy in blocks
-	for (;; start = 0, end -= head->count, head = head->next) {
-		_um_vec_verify(head);
-		if (end <= head->count) {
-			for (size_t i = start; i < end; i++) {
-				void *dst = (void *)_um_vec_push_to(out, one);
-				void *src = ((char *)(head + 1)) + i * one;
-				memcpy(dst, src, one);
-			}
-			break;
-		} else {
-			for (size_t i = start; i < head->count; i++) {
-				void *dst = (void *)_um_vec_push_to(out, one);
-				void *src = ((char *)(head + 1)) + i * one;
-				memcpy(dst, src, one);
-			}
-		}
-	}
-
-	return (char *)(out + 1);
+	h->len++;
+	return ((char *)b->data) + one * b->end++;
 }
-
-#endif // 0
 
 #endif // UM_DEQ_H

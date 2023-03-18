@@ -7,8 +7,8 @@
 
 #include "um/common.h"
 
-#ifndef UMV_BUCKET_SIZE
-#define UMV_BUCKET_SIZE 128
+#ifndef UMV_SIZE
+#define UMV_SIZE UM_CHUNK_SIZE
 #endif
 
 #define _umv_head(T)                                                           \
@@ -25,28 +25,24 @@
 		T data[];                                                      \
 	}
 
-typedef struct _umv_bucket_struct {
+typedef struct _umv_b {
 	size_t end;
-	struct _umv_bucket_struct *next;
+	struct _umv_b *next;
 	char data[];
-} _umv_bucket_struct;
+} _umv_b;
 
-typedef struct _umv_head_struct {
+typedef struct _umv_h {
 	size_t cap;
 	size_t len;
-	_umv_bucket_struct bucket;
-} _umv_head_struct;
+	_umv_b bucket;
+} _umv_h;
 
-_Static_assert(sizeof(_umv_head_struct) == sizeof(_umv_head(char)), "head");
-_Static_assert(sizeof(_umv_bucket_struct) == sizeof(_umv_bucket(char)),
-	       "bucket");
-
-// TODO head types to deq
-// TODO non void* funcs to deq
+_Static_assert(sizeof(_umv_h) == sizeof(_umv_head(char)), "head");
+_Static_assert(sizeof(_umv_b) == sizeof(_umv_bucket(char)), "bucket");
 
 #define umv(T) T ***
 #define umv_new_manual(T, N) ((umv(T))umv_alloc(N, sizeof(T)))
-#define umv_new(T) umv_new_manual(T, UMV_BUCKET_SIZE / sizeof(T))
+#define umv_new(T) umv_new_manual(T, UMV_SIZE)
 #define umv_len(V) (UmVHead(V)->len)
 #define umv_at(V, I) ((UmVItemT(V) *)_umv_at(UmVGHead(V), UmVItemS(V), I))
 #define umv_get(V, I) (*umv_at(V, I))
@@ -58,23 +54,21 @@ _Static_assert(sizeof(_umv_bucket_struct) == sizeof(_umv_bucket(char)),
 #define umv_loop(...) UmVLoopN(__VA_ARGS__, H, H, I, N, L, L, L, L)(__VA_ARGS__)
 #define umv_slice(V, START, END)                                               \
 	umv_slice_into(V, umv_new(UmVItemT(V)), START, END)
-// TODO check dst is a umv
 #define umv_slice_into(V, DST, START, END)                                     \
-	(__typeof__(V))_umv_slice((_umv_head_struct *)(DST), UmVGHead(V),      \
-				  UmVItemS(V), START, END)
+	(__typeof__(V))_umv_slice((_umv_h *)(DST), UmVGHead(V), UmVItemS(V),   \
+				  START, END)
 
-// TODO GHead to deq + push + at
-#define _umv(V) umv(UmVItemT(V))
+#define UmV(V) umv(UmVItemT(V))
 #define UmVItem(V) ***V
 #define UmVItemT(V) __typeof__(UmVItem(V))
 #define UmVItemS(V) sizeof(UmVItemT(V))
 #define UmVHeadT(V) _umv_head(UmVItemT(V))
 #define UmVHeadS(V) sizeof(UmVHeadT(V))
 #define UmVHead(V) ((UmVHeadT(V) *)(V))
-#define UmVGHead(V) ((_umv_head_struct *)(V))
+#define UmVGHead(V) ((_umv_h *)(V))
 #define UmVBucketT(V) _umv_bucket(UmVItemT(V))
 #define UmVBucket(V) (&(UmVHead(V)->bucket))
-#define UmVGBucket(V) ((_umv_bucket_struct *)(UmVBucket(V)))
+#define UmVGBucket(V) ((_umv_b *)(UmVBucket(V)))
 #define UmVCountBuckets(V) _umv_count_buckets(UmVGBucket(V))
 #define UmVAddBucket(B, CAP, ONE)                                              \
 	do {                                                                   \
@@ -138,7 +132,7 @@ _Static_assert(sizeof(_umv_bucket_struct) == sizeof(_umv_bucket(char)),
 	     (O) = 0)                                                          \
 		for (UmVItemT(V)(N); (O); (O) = 0)                             \
 			for (UmVBucketT(V) * (B) =                             \
-				 _umv_rewind(UmVGHead(V), &(S), &(E));         \
+				 (void *)_umv_rewind(UmVGHead(V), &(S), &(E)); \
 			     (O) && (B); (B) = (B)->next)                      \
 				for ((C) = (S), (S) = 0, (N) = (B)->data[C],   \
 				    (F) = (E) <= (B)->end ? ((O) = 0, (E))     \
@@ -146,41 +140,47 @@ _Static_assert(sizeof(_umv_bucket_struct) == sizeof(_umv_bucket(char)),
 				     (C) < (F);                                \
 				     (C)++, (I)++, (N) = (B)->data[C])
 
-#define UmVNextSpaceOnEnd(B, N, CAP, ONE)                                      \
-	do {                                                                   \
-		while ((B)->end + (N) > (CAP)) {                               \
-			if ((B)->next) {                                       \
-				(B) = (B)->next;                               \
-			} else {                                               \
-				UmVAddBucket(B, CAP, ONE);                     \
-				break;                                         \
-			}                                                      \
-		}                                                              \
-	} while (0)
+#define UmVLastBucket(B, N, CAP, ONE)                                          \
+	(__typeof__(B))_umv_last_bucket((_umv_b *)B, N, CAP, ONE)
 
 // TODO unify with deq
 // TODO as expr instead
 
-static inline void *umv_alloc(size_t count, size_t one)
+static inline _umv_h *umv_alloc(size_t count, size_t one)
 {
-	// TODO same in deq
-	_umv_head_struct *mem = malloc(sizeof *mem + one * count);
+	size_t size = um_next_pow2(sizeof(_umv_h) + one * count);
+	size_t cap = (size - sizeof(_umv_h)) / one;
+	_umv_h *mem = malloc(size);
 	assert(mem);
-	*mem = (_umv_head_struct){.cap = count};
+	*mem = (_umv_h){.cap = cap};
 	return mem;
 }
 
-static inline void *_umv_alloc_bucket(size_t count, size_t one)
+static inline _umv_b *_umv_alloc_bucket(size_t cap, size_t one)
 {
-	// TODO same in deq
-	_umv_bucket_struct *mem = malloc(sizeof *mem + one * count);
+	_umv_b *mem = malloc(sizeof *mem + one * cap);
 	assert(mem);
-	*mem = (_umv_bucket_struct){0};
+	*mem = (_umv_b){0};
 	return mem;
 }
 
-// TODO in deq
-static inline size_t _umv_count_buckets(_umv_bucket_struct *b)
+static inline _umv_b *_umv_last_bucket(_umv_b *b, size_t n, size_t cap,
+				       size_t one)
+{
+	assert(n <= cap);
+
+	while (b->next)
+		b = b->next;
+
+	if (b->end + n > cap) {
+		b->next = _umv_alloc_bucket(cap, one);
+		b = b->next;
+	}
+
+	return b;
+}
+
+static inline size_t _umv_count_buckets(_umv_b *b)
 {
 	size_t n = 0;
 
@@ -191,31 +191,24 @@ static inline size_t _umv_count_buckets(_umv_bucket_struct *b)
 	return n;
 }
 
-// TODO to deq
-static inline void *_umv_push_at(_umv_head_struct *h, size_t one)
+static inline void *_umv_push_at(_umv_h *h, size_t one)
 {
 	assert(h);
 
 	size_t cap = h->cap;
-
-	_umv_bucket_struct *b = &h->bucket;
-
-	UmVNextSpaceOnEnd(b, 1, cap, one);
+	_umv_b *b = UmVLastBucket(&h->bucket, 1, cap, one);
 
 	h->len++;
 	return ((char *)b->data) + one * b->end++;
 }
 
-// TODO head to deq
-static inline void *_umv_at(_umv_head_struct *h, size_t one, size_t index)
+static inline void *_umv_at(_umv_h *h, size_t one, size_t index)
 {
 	assert(h);
+	assert(index < h->len);
 
 	size_t cap = h->cap;
-
-	_umv_bucket_struct *b = &h->bucket;
-
-	assert(index < h->len);
+	_umv_b *b = &h->bucket;
 
 	while (index >= cap) {
 		index -= cap;
@@ -227,12 +220,12 @@ static inline void *_umv_at(_umv_head_struct *h, size_t one, size_t index)
 
 // TODO optimize memcpy in blocks
 // TODO hugely inefficient with push at every iteration
-static inline void *_umv_slice(_umv_head_struct *out, _umv_head_struct *h,
-			       size_t one, size_t start, size_t end)
+static inline _umv_h *_umv_slice(_umv_h *out, _umv_h *h, size_t one,
+				 size_t start, size_t end)
 {
 	assert(end >= start);
 
-	_umv_bucket_struct *b = &h->bucket;
+	_umv_b *b = &h->bucket;
 	size_t cap = h->cap;
 
 	while (start >= cap) {
@@ -261,10 +254,10 @@ static inline void *_umv_slice(_umv_head_struct *out, _umv_head_struct *h,
 	return out;
 }
 
-static inline void *_umv_rewind(_umv_head_struct *h, int *start, int *end)
+static inline _umv_b *_umv_rewind(_umv_h *h, int *start, int *end)
 {
 	size_t cap = h->cap;
-	_umv_bucket_struct *b = &h->bucket;
+	_umv_b *b = &h->bucket;
 
 	while (*start > cap) {
 		*start -= cap;
