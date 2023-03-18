@@ -58,7 +58,7 @@ static_assert(sizeof(_umd_b) == sizeof(_umd_bucket(char)), "bucket");
 #define UmDGHead(D) ((_umd_h *)(D))
 #define UmDBucketT(D) _umd_bucket(UmDItemT(D))
 #define UmDBucket(D) (&(UmDHead(D)->bucket))
-#define UmDGBucket(D) ((_umd_b*)(UmDBucket(D)))
+#define UmDGBucket(D) ((_umd_b *)(UmDBucket(D)))
 #define UmDPushAt(D) (UmDItemT(D) *)_umd_push_at(UmDGHead(D), UmDItemS(D))
 #define UmDCountBuckets(D) _umd_count_buckets(UmDGBucket(D))
 #define UmDAddBucket(B, CAP, ONE)                                              \
@@ -84,10 +84,9 @@ static_assert(sizeof(_umd_b) == sizeof(_umd_bucket(char)), "bucket");
 #define UmDEachImpH(...) UmE("umd_each: too many arguments")
 #define UmDLoopImpL(...) UmE("umd_loop: not enough arguments")
 #define UmDLoopImpH(...) UmE("umd_loop: too many arguments")
-#define UmDEachImpN(D, NAME)                                                   \
-	UmDEachImp(D, NAME, UmGen(_b), UmGen(_o), UmGen(_i), UmGen(_c))
+#define UmDEachImpN(D, NAME) UmDEachImpI(D, NAME, UmGen(_i))
 #define UmDEachImpI(D, NAME, INDEX)                                            \
-	UmDEachImp(D, NAME, UmGen(_b), UmGen(_o), (INDEX), UmGen(_c))
+	UmDEachImp(D, NAME, UmGen(_b), UmGen(_o), INDEX, UmGen(_c))
 
 // D self
 // N name

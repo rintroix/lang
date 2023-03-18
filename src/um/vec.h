@@ -88,16 +88,14 @@ static_assert(sizeof(_umv_b) == sizeof(_umv_bucket(char)), "bucket");
 #define UmVEachImpH(...) UmE("umv_each: too many arguments")
 #define UmVLoopImpL(...) UmE("umv_loop: not enough arguments")
 #define UmVLoopImpH(...) UmE("umv_loop: too many arguments")
-#define UmVEachImpN(V, NAME)                                                   \
-	UmVEachImp(V, NAME, UmGen(_b), UmGen(_o), UmGen(_i), UmGen(_c))
+#define UmVEachImpN(V, NAME) UmVEachImpI(V, NAME, UmGen(_i))
 #define UmVEachImpI(V, NAME, INDEX)                                            \
-	UmVEachImp(V, NAME, UmGen(_b), UmGen(_o), (INDEX), UmGen(_c))
+	UmVEachImp(V, NAME, UmGen(_b), UmGen(_o), INDEX, UmGen(_c))
 #define UmVLoopImpN(V, NAME, START, END)                                       \
-	UmVLoopImp(V, NAME, UmGen(_h), UmGen(_o), UmGen(_i), UmGen(_c),        \
-		   UmGen(_f), UmGen(_s), (START), UmGen(_e), (END))
+	UmVLoopImpI(V, NAME, START, END, UmGen(_i))
 #define UmVLoopImpI(V, NAME, START, END, INDEX)                                \
-	UmVLoopImp(V, NAME, UmGen(_h), UmGen(_o), (INDEX), UmGen(_c),          \
-		   UmGen(_f), UmGen(_s), (START), UmGen(_e), (END))
+	UmVLoopImp(V, NAME, UmGen(_h), UmGen(_o), INDEX, UmGen(_c), UmGen(_f), \
+		   UmGen(_s), START, UmGen(_e), END)
 
 // V self
 // N name

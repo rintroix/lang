@@ -19,9 +19,7 @@ typedef enum e_flags {
 	F_RETURN = 1 << 0,
 } flags;
 
-static inline enum e_flags noret(enum e_flags f) {
-	return f & ~F_RETURN;
-}
+static inline enum e_flags noret(enum e_flags f) { return f & ~F_RETURN; }
 
 size_t add_type(typetable *table, type t)
 {
@@ -280,8 +278,7 @@ vec(define) funargs(typetable *tt, vec(ast) list)
 			check(it.id.tag == I_WORD);
 			size_t index =
 			    add_arg_type(tt, (type){.tag = T_UNKNOWN});
-			push(out,
-			     (define){.name = it.id.name, .index = index});
+			push(out, (define){.name = it.id.name, .index = index});
 		} break;
 
 		case A_LIST: {
@@ -322,8 +319,7 @@ ast atom_or_list(vec(ast) iter, size_t start, size_t end)
 	}
 }
 
-ast parse_operator(context *ctx, typetable *table, vec(ast) list,
-		    size_t start)
+ast parse_operator(context *ctx, typetable *table, vec(ast) list, size_t start)
 {
 	// TODO opreq, same as callreq
 	// TODO better find
@@ -489,7 +485,8 @@ vec(function *) find_candidates(context *ctx, typetable *table, char *name)
 				continue;
 
 			if (table_compatible(*table, f.table)) {
-				push(out, vat(ctx->functions, i)); // TODO ptr loop
+				push(out,
+				     vat(ctx->functions, i)); // TODO ptr loop
 			}
 		}
 	}
@@ -659,14 +656,14 @@ void compile_ast(output *o, typetable *table, flags fl, ast a, int indent)
 {
 	switch (a.tag) {
 	case A_BLOCK: {
-			size_t len = vlen(a.block.items);
+		size_t len = vlen(a.block.items);
 		bug_if(len == 0);
 		int sub = indent;
 		if (!a.block.after_block) {
 			odef(o, "%*s{\n", indent, "");
 			sub = indent + 2;
 		}
-		vloop(a.block.items, item, 0, len - 1, i)
+		vloop(a.block.items, item, 0, len - 1)
 		{
 			compile_ast(o, table, noret(fl), item, sub);
 		}
@@ -771,7 +768,7 @@ void compile_fn(context *ctx, output *o, typetable *table, function *fun)
 	if (body.tag == A_BLOCK)
 		body.block.after_block = 1;
 	compile_ast(o, table, F_RETURN, body, 2);
-	
+
 	odef(o, "}\n");
 }
 
