@@ -15,6 +15,14 @@ ast parse(context *ctx, typetable *table, ast a);
 #define trace(...)                                                             \
 	_Generic((__VA_ARGS__), ast * : aptrace, type : ttrace)(__VA_ARGS__)
 
+typedef enum e_flags {
+	F_RETURN = 1 << 0,
+} flags;
+
+static inline enum e_flags noret(enum e_flags f) {
+	return f & ~F_RETURN;
+}
+
 size_t add_type(typetable *table, type t)
 {
 	size_t index = vlen(table->body);
@@ -320,7 +328,7 @@ ast parse_operator(context *ctx, typetable *table, vec(ast) list,
 	// TODO opreq, same as callreq
 	// TODO better find
 	size_t pos = vlen(list);
-	forvr(list, it, start, vlen(list), index)
+	vloop(list, it, start, vlen(list), index)
 	{
 		if (is(it, O(0))) {
 			pos = index;
@@ -376,8 +384,8 @@ int _match(vec(ast) list, ast **patterns, size_t n)
 #define MA(...) ((ast *[]){__VA_ARGS__})
 #define match(L, ...) _match(L, MA(__VA_ARGS__), LEN(MA(__VA_ARGS__)))
 
-block parse_block(context *ctx, typetable *table, vec(ast) list, size_t start,
-		  size_t end)
+ast parse_block(context *ctx, typetable *table, vec(ast) list, size_t start,
+		size_t end)
 {
 	// TODO compactor first
 
@@ -394,7 +402,7 @@ block parse_block(context *ctx, typetable *table, vec(ast) list, size_t start,
 		push(items, b);
 	}
 
-	return (block){.defines = defs, .items = items}; // TODO functions
+	return ablock(0, defs, items); // TODO functions
 }
 
 int parse_top_one(context *ctx, vec(ast) items)
@@ -409,8 +417,7 @@ int parse_top_one(context *ctx, vec(ast) items)
 		// TODO funargs require context as well, inits might need it
 		vec(define) args = funargs(&table, vat(items, 3)->list.items);
 		context local = (context){.defines = args, .next = ctx};
-		ast init =
-		    ablock(parse_block(&local, &table, items, 4, vlen(items)));
+		ast init = parse_block(&local, &table, items, 4, vlen(items));
 		define self = def(name, retindex, init);
 
 		push(ctx->functions, fn(self, args, table));
@@ -522,7 +529,7 @@ ast parse_list(context *ctx, typetable *table, vec(ast) items)
 
 	vec(ast) args = avec(ast);
 	vec(size_t) arg_indices = avec(size_t);
-	forvr(items, item, 1, vlen(items))
+	vloop(items, item, 1, vlen(items))
 	{
 		ast arg = parse(ctx, table, item);
 		push(args, arg);
@@ -648,16 +655,28 @@ __attribute__((format(printf, 2, 3))) void odef(output *o,
 	va_end(base);
 }
 
-void compile_ast(output *o, typetable *table, ast a, int indent)
+void compile_ast(output *o, typetable *table, flags fl, ast a, int indent)
 {
 	switch (a.tag) {
 	case A_BLOCK: {
-		odef(o, "%*s{\n", indent, "");
-		veach(a.block.items, item)
-		{
-			compile_ast(o, table, item, indent + 2);
+		int sub = indent + 2;
+		if (!a.block.after_block) {
+			odef(o, "%*s{\n", indent, "");
+		} else {
+			sub = indent;
 		}
-		odef(o, "%*s}\n", indent, "");
+		// TODO range loop
+		veach(a.block.items, item, i)
+		{
+			if (i + 1 == vlen(a.block.items)) {
+				compile_ast(o, table, fl, item, sub);
+			} else {
+				compile_ast(o, table, noret(fl), item, sub);
+			}
+		}
+		if (!a.block.after_block) {
+			odef(o, "%*s}\n", indent, "");
+		}
 	} break;
 	case A_REF: {
 		odef(o, "%s", a.ref.def->name);
@@ -668,12 +687,16 @@ void compile_ast(output *o, typetable *table, ast a, int indent)
 	case A_CALL: {
 		if (indent)
 			odef(o, "%*s", indent, "");
+
+		if (fl & F_RETURN)
+			odef(o, "return ");
+
 		odef(o, "%s(", a.call.name);
 		veach(a.call.args, arg, i)
 		{
 			if (i)
 				odef(o, ", ");
-			compile_ast(o, table, arg, 0);
+			compile_ast(o, table, noret(fl), arg, 0);
 		}
 		odef(o, ")");
 		if (indent)
@@ -697,38 +720,36 @@ void compile_ast(output *o, typetable *table, ast a, int indent)
 	}
 }
 
-// ast *propagate_return(size_t tindex, ast *a)
-// {
-// 	bug_if_not(a);
+ast returning(size_t tindex, ast a)
+{
+	switch (a.tag) {
+	case A_BLOCK: {
+		size_t len = vlen(a.block.items);
+		if (!len)
+			bug("empty block requested to return");
+		ast *last = vat(a.block.items, len - 1);
+		*last = returning(tindex, *last);
+		return a;
+	} break;
+	case A_REF: {
+		todo;
+	} break;
+	case A_LIST: {
+		todo;
+	} break;
+	case A_CALL: {
+		todo;
+	} break;
 
-// 	switch (a->tag) {
-// 	case A_BLOCK: {
-// 		size_t len = vlen(a->block.items);
-// 		if (len) {
-// 			ast *last = vat(a->block.items, len - 1);
-// 			// *last =
-// 		}
-// 		return a;
-// 	} break;
-// 	case A_REF: {
-// 		todo;
-// 	} break;
-// 	case A_LIST: {
-// 		todo;
-// 	} break;
-// 	case A_CALL: {
-// 		todo;
-// 	} break;
+	case A_ID: {
+		todo;
+	} break;
 
-// 	case A_ID: {
-// 		todo;
-// 	} break;
-
-// 	case A_OPER: {
-// 		todo;
-// 	} break;
-// 	}
-// }
+	case A_OPER: {
+		todo;
+	} break;
+	}
+}
 
 void compile_fn(context *ctx, output *o, typetable *table, function *fun)
 {
@@ -750,8 +771,9 @@ void compile_fn(context *ctx, output *o, typetable *table, function *fun)
 	odef(o, ") {\n");
 
 	ast body = fun->self.init;
-	
-	compile_ast(o, table, body, 2);
+	if (body.tag == A_BLOCK)
+		body.block.after_block = 1;
+	compile_ast(o, table, F_RETURN, body, 2);
 	
 	odef(o, "}\n");
 }
@@ -813,6 +835,7 @@ int main(int argc, char **argv)
 	    .declarations = adeq(char),
 	    .definitions = adeq(char),
 	};
+
 	compile(&topctx, &o, &maintable, &mainreq);
 
 	printf("%s\n", umd_to_cstr(o.declarations));

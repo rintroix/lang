@@ -9,20 +9,18 @@
 #define vlen(V) umv_len(V)
 #define vat(V, N) umv_at(V, N)
 #define vget(V, N) umv_get(V, N)
-#define forv(...) umv_each(__VA_ARGS__)
-#define forvr(...) umv_loop(__VA_ARGS__)
 #define vslice(V, START, END) umv_slice(V, START, END)
 #define veach(...) umv_each(__VA_ARGS__)
 #define vloop(...) umv_loop(__VA_ARGS__)
 
 #define deq(T) umd(T)
 #define adeq(T) umd_new(T)
-#define deach(...) umd_each(__VA_ARGS__)
-#define dloop(...) umd_loop(__VA_ARGS__)
 #define dget(D, N) umd_get(D, N)
 #define dat(D, N) umd_at(D, N)
 #define dpush(D, X) umd_push(D, X)
 #define dlen(D) umd_len(D)
+#define deach(...) umd_each(__VA_ARGS__)
+#define dloop(...) umd_loop(__VA_ARGS__)
 
 enum e_type { T_UNKNOWN = 1, T_SIMPLE, T_COMPOUND };
 
@@ -72,12 +70,6 @@ enum e_ast { A_LIST = 1, A_CALL, A_ID, A_OPER, A_BLOCK, A_REF };
 
 enum e_id { I_WORD, I_KW, I_OP, I_INT };
 
-typedef struct block {
-	vec(struct function) functions;
-	vec(struct define) defines;
-	vec(struct ast) items;
-} block;
-
 struct ast {
 	enum e_ast tag;
 	size_t index;
@@ -108,7 +100,12 @@ struct ast {
 			struct ast *right;
 		} oper;
 
-		struct block block;
+		struct {
+			vec(struct function) functions;
+			vec(struct define) defines;
+			vec(struct ast) items;
+			int after_block;
+		} block;
 	};
 };
 
@@ -135,7 +132,7 @@ typedef struct function {
 
 #define aint(NAME) ((ast){.tag = A_ID, .id = {.name = (NAME), .tag = I_INT}})
 
-#define ablock(BLOCK) ((ast){.tag = A_BLOCK, .block = (BLOCK)})
+#define ablock(FUNS, DEFS, ITEMS) ((ast){.tag = A_BLOCK, .block = {.functions = (FUNS), .defines = (DEFS), .items = (ITEMS)}})
 
 #define alist(ITEMS) ((ast){.tag = A_LIST, .list = {.items = (ITEMS)}})
 
