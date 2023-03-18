@@ -8,7 +8,7 @@
 #include <string.h>
 
 #ifndef UM_CHUNK_SIZE
-#define UM_CHUNK_SIZE 16
+#define UM_CHUNK_SIZE 10
 #endif
 
 #define UmEval2(X) X
@@ -16,7 +16,7 @@
 #define UmCat2(X, Y) X##Y
 #define UmCat(X, Y) UmCat2(X, Y)
 #define UmGen(X) UmCat(X, __LINE__)
-#define UmE(M) _Static_assert(0, M)
+#define UmE(M) static_assert(0, M)
 
 static inline uint32_t um_next_pow2(uint32_t x)
 {

@@ -35,8 +35,8 @@ typedef struct _umd_h {
 	_umd_b bucket;
 } _umd_h;
 
-_Static_assert(sizeof(_umd_h) == sizeof(_umd_head(char)), "head");
-_Static_assert(sizeof(_umd_b) == sizeof(_umd_bucket(char)), "bucket");
+static_assert(sizeof(_umd_h) == sizeof(_umd_head(char)), "head");
+static_assert(sizeof(_umd_b) == sizeof(_umd_bucket(char)), "bucket");
 
 #define umd(T) T *****
 #define umd_new_manual(T, N) ((umd(T))umd_alloc(N, sizeof(T)))
@@ -46,10 +46,7 @@ _Static_assert(sizeof(_umd_b) == sizeof(_umd_bucket(char)), "bucket");
 #define umd_get(D, I) (*umd_at(D, I))
 #define umd_each(...) UmDEachN(__VA_ARGS__, H, H, H, H, I, N, L, L)(__VA_ARGS__)
 #define umd_loop(...) UmDLoopN(__VA_ARGS__, H, H, I, N, L, L, L, L)(__VA_ARGS__)
-#define umd_push(D, ...)                                                       \
-	(*(UmDItemT(D) *)_umd_push_at(UmDGHead(D), UmDItemS(D)) =              \
-	     (__VA_ARGS__),                                                    \
-	 umd_len(D) - 1)
+#define umd_push(D, ...) (*UmDPushAt(D) = (__VA_ARGS__), umd_len(D) - 1)
 
 #define UmD(D) umd(UmDItemT(D))
 #define UmDItem(D) *****D
@@ -62,6 +59,7 @@ _Static_assert(sizeof(_umd_b) == sizeof(_umd_bucket(char)), "bucket");
 #define UmDBucketT(D) _umd_bucket(UmDItemT(D))
 #define UmDBucket(D) (&(UmDHead(D)->bucket))
 #define UmDGBucket(D) ((_umd_b*)(UmDBucket(D)))
+#define UmDPushAt(D) (UmDItemT(D) *)_umd_push_at(UmDGHead(D), UmDItemS(D))
 #define UmDCountBuckets(D) _umd_count_buckets(UmDGBucket(D))
 #define UmDAddBucket(B, CAP, ONE)                                              \
 	do {                                                                   \

@@ -37,8 +37,8 @@ typedef struct _umv_h {
 	_umv_b bucket;
 } _umv_h;
 
-_Static_assert(sizeof(_umv_h) == sizeof(_umv_head(char)), "head");
-_Static_assert(sizeof(_umv_b) == sizeof(_umv_bucket(char)), "bucket");
+static_assert(sizeof(_umv_h) == sizeof(_umv_head(char)), "head");
+static_assert(sizeof(_umv_b) == sizeof(_umv_bucket(char)), "bucket");
 
 #define umv(T) T ***
 #define umv_new_manual(T, N) ((umv(T))umv_alloc(N, sizeof(T)))
@@ -46,10 +46,7 @@ _Static_assert(sizeof(_umv_b) == sizeof(_umv_bucket(char)), "bucket");
 #define umv_len(V) (UmVHead(V)->len)
 #define umv_at(V, I) ((UmVItemT(V) *)_umv_at(UmVGHead(V), UmVItemS(V), I))
 #define umv_get(V, I) (*umv_at(V, I))
-#define umv_push(V, ...)                                                       \
-	(*(UmVItemT(V) *)_umv_push_at(UmVGHead(V), UmVItemS(V)) =              \
-	     (__VA_ARGS__),                                                    \
-	 umv_len(V) - 1)
+#define umv_push(V, ...) (*UmVPushAt(V) = (__VA_ARGS__), umv_len(V) - 1)
 #define umv_each(...) UmVEachN(__VA_ARGS__, H, H, H, H, I, N, L, L)(__VA_ARGS__)
 #define umv_loop(...) UmVLoopN(__VA_ARGS__, H, H, I, N, L, L, L, L)(__VA_ARGS__)
 #define umv_slice(V, START, END)                                               \
@@ -69,6 +66,7 @@ _Static_assert(sizeof(_umv_b) == sizeof(_umv_bucket(char)), "bucket");
 #define UmVBucketT(V) _umv_bucket(UmVItemT(V))
 #define UmVBucket(V) (&(UmVHead(V)->bucket))
 #define UmVGBucket(V) ((_umv_b *)(UmVBucket(V)))
+#define UmVPushAt(V) (UmVItemT(V) *)_umv_push_at(UmVGHead(V), UmVItemS(V))
 #define UmVCountBuckets(V) _umv_count_buckets(UmVGBucket(V))
 #define UmVAddBucket(B, CAP, ONE)                                              \
 	do {                                                                   \
