@@ -47,7 +47,7 @@ static_assert(sizeof(_umv_b) == sizeof(_umv_bucket(char)), "bucket");
 #define umv_at(V, I) ((UmVItemT(V) *)_umv_at(UmVGHead(V), UmVItemS(V), I))
 #define umv_get(V, I) (*umv_at(V, I))
 #define umv_push(V, ...) (*UmVPushAt(V) = (__VA_ARGS__), umv_len(V) - 1)
-#define umv_each(...) UmVEachN(__VA_ARGS__, H, H, H, H, I, N, L, L)(__VA_ARGS__)
+#define umv_each(...) UmVEachN(__VA_ARGS__, H, H, H, P, I, N, L, L)(__VA_ARGS__)
 #define umv_loop(...) UmVLoopN(__VA_ARGS__, H, H, I, N, L, L, L, L)(__VA_ARGS__)
 #define umv_slice(V, START, END)                                               \
 	umv_slice_into(V, umv_new(UmVItemT(V)), START, END)
@@ -89,8 +89,9 @@ static_assert(sizeof(_umv_b) == sizeof(_umv_bucket(char)), "bucket");
 #define UmVLoopImpL(...) UmE("umv_loop: not enough arguments")
 #define UmVLoopImpH(...) UmE("umv_loop: too many arguments")
 #define UmVEachImpN(V, NAME) UmVEachImpI(V, NAME, UmGen(_i))
-#define UmVEachImpI(V, NAME, INDEX)                                            \
-	UmVEachImp(V, NAME, UmGen(_b), UmGen(_o), INDEX, UmGen(_c))
+#define UmVEachImpI(V, NAME, INDEX) UmVEachImpP(V, NAME, INDEX, UmGen(_p))
+#define UmVEachImpP(V, NAME, INDEX, PTR)                                       \
+	UmVEachImp(V, NAME, UmGen(_b), UmGen(_o), INDEX, UmGen(_c), PTR)
 #define UmVLoopImpN(V, NAME, START, END)                                       \
 	UmVLoopImpI(V, NAME, START, END, UmGen(_i))
 #define UmVLoopImpI(V, NAME, START, END, INDEX)                                \
@@ -103,14 +104,16 @@ static_assert(sizeof(_umv_b) == sizeof(_umv_bucket(char)), "bucket");
 // O sentinel
 // I overall index
 // C bucket index
-#define UmVEachImp(V, N, B, O, I, C)                                           \
+// P pointer to value
+#define UmVEachImp(V, N, B, O, I, C, P)                                        \
 	for (int(O) = 1, (C) = 0, (I) = 0; (O); (O) = 0)                       \
-		for (UmVItemT(V)(N); (O); (O) = 0)                             \
+		for (UmVItemT(V)(N), *(P); (O); (O) = 0)                       \
 			for (UmVBucketT(V) * (B) = (void *)UmVBucket(V); (B);  \
 			     (B) = (B)->next)                                  \
-				for ((C) = 0, (N) = (B)->data[C];              \
-				     (C) < (B)->end;                           \
-				     (C)++, (I)++, (N) = (B)->data[C])
+				for ((C) = 0, (N) = (B)->data[C],              \
+				    (P) = (B)->data + (C);                     \
+				     (C) < (B)->end; (C)++, (I)++,             \
+				    (N) = (B)->data[C], (P) = (B)->data + (C))
 
 // V self
 // N name

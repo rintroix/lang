@@ -52,13 +52,12 @@ typedef struct opreq {
 } opreq;
 
 typedef struct typetable {
-	type ret;
-	vec(type) args;
-	vec(type) body;
+	vec(type) types;
 	vec(callreq) calls;
 	vec(opreq) ops;
+	size_t arity;
 } typetable;
- 
+
 #define fn(DEF, ARGS, TABLE)                                                   \
 	((function){                                                           \
 	    .self = (DEF),                                                     \

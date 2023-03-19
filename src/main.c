@@ -7,7 +7,13 @@
 #include "parser.h"
 #include "um/um.h"
 
+// TODO deduplicate dependencies
+// TODO propagate ret type
+// TODO lets
+// TODO propagate through assignment
+
 ast parse(context *ctx, typetable *table, ast a);
+void compile(context *ctx, output *o, typetable *table, callreq req);
 
 #define lift(...)                                                              \
 	_Generic((__VA_ARGS__), ast : alift, type : tlift)(__VA_ARGS__)
@@ -23,55 +29,28 @@ static inline enum e_flags noret(enum e_flags f) { return f & ~F_RETURN; }
 
 size_t add_type(typetable *table, type t)
 {
-	size_t index = vlen(table->body);
-	push(table->body, t);
-	return index;
-}
-
-size_t add_arg_type(typetable *table, type t)
-{
-	size_t index = vlen(table->args);
-	push(table->args, t);
-	return index;
-}
-
-size_t add_ret_type(typetable *table, type t)
-{
-	table->ret = t;
-	return 0;
+	return push(table->types, t);
 }
 
 size_t add_opreq(typetable *table, opreq o)
 {
-	size_t index = vlen(table->ops);
-	push(table->ops, o);
-	return index;
+	return push(table->ops, o);
 }
 
 size_t add_callreq(typetable *table, callreq c)
 {
-	size_t index = vlen(table->calls);
-	push(table->calls, c);
-	return index;
-}
-
-type get_ret_type(typetable *table) { return table->ret; }
-
-type get_arg_type(typetable *table, size_t index)
-{
-	return vget(table->args, index);
+	return push(table->calls, c);
 }
 
 type get_type(typetable *table, size_t index)
 {
-	return vget(table->body, index);
+	return vget(table->types, index);
 }
 
 typetable new_table()
 {
 	return (typetable){
-	    .args = avec(type),
-	    .body = avec(type),
+	    .types = avec(type),
 	    .calls = avec(callreq),
 	    .ops = avec(opreq),
 	};
@@ -80,9 +59,7 @@ typetable new_table()
 typetable clone_table(typetable table)
 {
 	return (typetable){
-	    .ret = table.ret,
-	    .args = vslice(table.args, 0, vlen(table.args)),
-	    .body = vslice(table.body, 0, vlen(table.body)),
+	    .types = vslice(table.types, 0, vlen(table.types)),
 	    .calls = vslice(table.calls, 0, vlen(table.calls)),
 	    .ops = vslice(table.ops, 0, vlen(table.ops)),
 	};
@@ -276,20 +253,19 @@ vec(define) funargs(typetable *tt, vec(ast) list)
 		switch (it.tag) {
 		case A_ID: {
 			check(it.id.tag == I_WORD);
-			size_t index =
-			    add_arg_type(tt, (type){.tag = T_UNKNOWN});
+			size_t index = add_type(tt, (type){.tag = T_UNKNOWN});
 			push(out, (define){.name = it.id.name, .index = index});
 		} break;
 
 		case A_LIST: {
 			vec(ast) items = it.list.items;
 			check(vlen(items) > 1);
-			ast *head = vat(items, 0);
-			check(head->tag == A_ID && head->id.tag == I_WORD);
+			ast head = vget(items, 0);
+			check(head.tag == A_ID && head.id.tag == I_WORD);
+			char *name = head.id.name;
 			size_t index =
-			    add_arg_type(tt, list2type(items, 1, vlen(items)));
-			push(out,
-			     (define){.name = head->id.name, .index = index});
+			    add_type(tt, list2type(items, 1, vlen(items)));
+			push(out, (define){.name = name, .index = index});
 		} break;
 
 		default: {
@@ -407,11 +383,12 @@ int parse_top_one(context *ctx, vec(ast) items)
 		char *name = vat(items, 1)->id.name;
 		typetable table = new_table();
 
-		size_t retindex = add_ret_type(
-		    &table, list2type(items, 2, 3)); // TODO extraction hack
+		 // TODO extraction hack
+		size_t retindex = add_type(&table, list2type(items, 2, 3));
 
 		// TODO funargs require context as well, inits might need it
 		vec(define) args = funargs(&table, vat(items, 3)->list.items);
+		table.arity = vlen(args);
 		context local = (context){.defines = args, .next = ctx};
 		ast init = parse_block(&local, &table, items, 4, vlen(items));
 		define self = def(name, retindex, init);
@@ -431,8 +408,6 @@ int parse_top_one(context *ctx, vec(ast) items)
 
 int types_compatible(type a, type b)
 {
-	dbg("compat %s vs %s", show_type(a), show_type(b));
-
 	if (a.tag == T_UNKNOWN || b.tag == T_UNKNOWN)
 		return 1;
 
@@ -456,15 +431,12 @@ int types_compatible(type a, type b)
 
 int table_compatible(typetable a, typetable b)
 {
-	if (vlen(a.args) != vlen(b.args))
+	if (a.arity != b.arity)
 		return 0;
 
-	if (!types_compatible(a.ret, b.ret))
-		return 0;
-
-	veach(a.args, it, i)
+	vloop(a.types, it, 0, 1 + a.arity, i)
 	{
-		if (!types_compatible(it, vget(b.args, i)))
+		if (!types_compatible(it, vget(b.types, i)))
 			return 0;
 	}
 
@@ -479,14 +451,13 @@ vec(function *) find_candidates(context *ctx, typetable *table, char *name)
 		if (!ctx->functions)
 			continue;
 
-		veach(ctx->functions, f, i)
+		veach(ctx->functions, f, i, fp)
 		{
 			if (0 != strcmp(name, f.self.name))
 				continue;
 
 			if (table_compatible(*table, f.table)) {
-				push(out,
-				     vat(ctx->functions, i)); // TODO ptr loop
+				push(out, fp);
 			}
 		}
 	}
@@ -548,15 +519,14 @@ ast find_ref(context *ctx, char *name)
 		if (!ctx->defines)
 			continue;
 
-		veach(ctx->defines, d, i)
+		veach(ctx->defines, d, i, dp)
 		{
 			if (0 != strcmp(name, d.name))
 				continue;
 
-			// TODO ptr loop
 			return ((ast){.tag = A_REF,
 				      .index = d.index,
-				      .ref = {.def = vat(ctx->defines, i)}});
+				      .ref = {.def = dp}});
 		}
 	}
 
@@ -604,8 +574,6 @@ ast parse(context *ctx, typetable *table, ast a)
 
 type unify_types(type a, type b)
 {
-	log("unify %s and %s", show_type(a), show_type(b));
-
 	if (a.tag == T_UNKNOWN)
 		return b;
 
@@ -617,7 +585,7 @@ type unify_types(type a, type b)
 
 	switch (a.tag) {
 	case T_UNKNOWN: {
-		bug("can't happen");
+		bug("unknown type");
 	} break;
 	case T_COMPOUND: {
 		todo;
@@ -627,7 +595,7 @@ type unify_types(type a, type b)
 		bug_if_not(b.name);
 		if (0 == strcmp(a.name, b.name))
 			return a;
-		error("unify simple types: %s vs %s", a.name, b.name);
+		bug("unify simple types: %s vs %s", a.name, b.name);
 	} break;
 	}
 
@@ -673,7 +641,16 @@ void compile_ast(output *o, typetable *table, flags fl, ast a, int indent)
 		}
 	} break;
 	case A_REF: {
+		if (indent)
+			odef(o, "%*s", indent, "");
+
+		if (fl & F_RETURN)
+			odef(o, "return "), bug_if_not(indent);
+
 		odef(o, "%s", a.ref.def->name);
+
+		if (indent)
+			odef(o, ";\n");
 	} break;
 	case A_LIST: {
 		bug("list");
@@ -683,7 +660,7 @@ void compile_ast(output *o, typetable *table, flags fl, ast a, int indent)
 			odef(o, "%*s", indent, "");
 
 		if (fl & F_RETURN)
-			odef(o, "return ");
+			odef(o, "return "), bug_if_not(indent);
 
 		odef(o, "%s(", a.call.name);
 		veach(a.call.args, arg, i)
@@ -747,7 +724,17 @@ ast returning(size_t tindex, ast a)
 
 void compile_fn(context *ctx, output *o, typetable *table, function *fun)
 {
-	char *ret = show_type(get_ret_type(table));
+	veach(table->calls, req, i) {
+		typetable t = new_table();
+		add_type(&t, get_type(table, req.ret));
+		t.arity = vlen(req.args);
+		veach(req.args, argi) {
+			add_type(&t, get_type(table, argi));
+		}
+		compile(ctx, o, &t, req);
+	}
+	
+	char *ret = show_type(get_type(table, 0));
 	char *name = fun->self.name;
 
 	odec(o, "%s %s(", ret, name);
@@ -757,7 +744,7 @@ void compile_fn(context *ctx, output *o, typetable *table, function *fun)
 	{
 		if (i != 0)
 			odec(o, ", "), odef(o, ", ");
-		char *tname = show_type(get_arg_type(table, i));
+		char *tname = show_type(get_type(table, arg.index));
 		odec(o, "%s %s", tname, arg.name);
 		odef(o, "%s %s", tname, arg.name);
 	}
@@ -772,25 +759,23 @@ void compile_fn(context *ctx, output *o, typetable *table, function *fun)
 	odef(o, "}\n");
 }
 
-void compile(context *ctx, output *o, typetable *table, callreq *req)
+void compile(context *ctx, output *o, typetable *table, callreq req)
 {
-	vec(function *) candidates = find_candidates(ctx, table, req->name);
+	vec(function *) candidates = find_candidates(ctx, table, req.name);
 
 	if (vlen(candidates) > 1)
-		error("too many candidates: %s", req->name);
+		error("too many candidates: %s", req.name);
 
 	if (vlen(candidates) == 0)
-		error("no candidates: %s", req->name);
+		error("no candidates: %s", req.name);
 
 	function *f = vget(candidates, 0);
 
 	typetable unitable = clone_table(f->table);
 
-	unitable.ret = unify_types(unitable.ret, table->ret);
-	veach(unitable.args, argp, i) // TODO ptr loop
+	vloop(unitable.types, t, 0, 1 + unitable.arity, i) // TODO loopP
 	{
-		*vat(unitable.args, i) =
-		    unify_types(argp, get_arg_type(table, i));
+		*vat(unitable.types, i) = unify_types(t, get_type(table, i));
 	}
 
 	compile_fn(ctx, o, &unitable, f);
@@ -820,7 +805,7 @@ int main(int argc, char **argv)
 	context topctx = parse_top(&upper, tops);
 	typetable maintable = new_table();
 	size_t mainret =
-	    add_ret_type(&maintable, (type){.tag = T_SIMPLE, .name = "int"});
+	    add_type(&maintable, (type){.tag = T_SIMPLE, .name = "int"});
 	vec(size_t) mainargs = avec(size_t);
 	callreq mainreq =
 	    (callreq){.name = "main", .ret = mainret, .args = mainargs};
@@ -830,7 +815,7 @@ int main(int argc, char **argv)
 	    .definitions = adeq(char),
 	};
 
-	compile(&topctx, &o, &maintable, &mainreq);
+	compile(&topctx, &o, &maintable, mainreq);
 
 	printf("%s\n", umd_to_cstr(o.declarations));
 	printf("%s\n", umd_to_cstr(o.definitions));
