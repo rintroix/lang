@@ -158,9 +158,15 @@ typedef struct context {
 	struct context *next;
 } context;
 
+typedef struct impl {
+	function* fp;
+	typetable table;
+} impl;
+
 typedef struct output {
 	deq(char) declarations;
 	deq(char) definitions;
+	vec(impl) implementations;
 } output;
 
 static inline ast alist0()

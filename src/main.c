@@ -11,6 +11,7 @@
 // TODO propagate ret type
 // TODO lets
 // TODO propagate through assignment
+// TODO call fetches actual generated fn
 
 ast parse(context *ctx, typetable *table, ast a);
 void compile(context *ctx, output *o, typetable *table, callreq req);
@@ -26,6 +27,25 @@ typedef enum e_flags {
 } flags;
 
 static inline enum e_flags noret(enum e_flags f) { return f & ~F_RETURN; }
+
+int same_type(type a, type b) {
+	if (a.tag != b.tag)
+		return 0;
+
+	switch (a.tag) {
+	case T_SIMPLE: {
+		return 0 == strcmp(a.name, b.name);
+	} break;
+	case T_COMPOUND: {
+		todo;
+	} break;
+	case T_UNKNOWN: {
+		bug("unknowns are not compatible");
+	} break;
+	}
+
+	bug("unreachable");
+}
 
 size_t add_type(typetable *table, type t)
 {
@@ -53,6 +73,7 @@ typetable new_table()
 	    .types = avec(type),
 	    .calls = avec(callreq),
 	    .ops = avec(opreq),
+	    .arity = 0,
 	};
 }
 
@@ -62,7 +83,20 @@ typetable clone_table(typetable table)
 	    .types = vslice(table.types, 0, vlen(table.types)),
 	    .calls = vslice(table.calls, 0, vlen(table.calls)),
 	    .ops = vslice(table.ops, 0, vlen(table.ops)),
+	    .arity = table.arity,
 	};
+}
+
+int same_table(typetable a, typetable b) {
+	if (a.arity != b.arity)
+		return 0;
+
+	vloop(a.types, t, 0, a.arity, i) {
+		if (!same_type(t, vget(b.types, i)))
+			return 0;
+	}
+
+	return 1;
 }
 
 ast *alift(ast a)
@@ -620,6 +654,20 @@ __attribute__((format(printf, 2, 3))) void odef(output *o,
 	va_end(base);
 }
 
+int oreg(output *o, function *fp, typetable table)
+{
+	veach(o->implementations, imp) {
+		if (fp != imp.fp)
+			continue;
+
+		if (same_table(table, imp.table))
+			return 0;
+	}
+
+	push(o->implementations, (impl){.fp = fp, .table = table});
+	return 1;
+}
+
 void compile_ast(output *o, typetable *table, flags fl, ast a, int indent)
 {
 	switch (a.tag) {
@@ -778,7 +826,9 @@ void compile(context *ctx, output *o, typetable *table, callreq req)
 		*vat(unitable.types, i) = unify_types(t, get_type(table, i));
 	}
 
-	compile_fn(ctx, o, &unitable, f);
+	if (oreg(o, f, unitable)) {
+		compile_fn(ctx, o, &unitable, f);
+	}
 }
 
 int main(int argc, char **argv)
@@ -811,8 +861,9 @@ int main(int argc, char **argv)
 	    (callreq){.name = "main", .ret = mainret, .args = mainargs};
 
 	output o = (output){
-	    .declarations = adeq(char),
 	    .definitions = adeq(char),
+	    .declarations = adeq(char),
+	    .implementations = avec(impl),
 	};
 
 	compile(&topctx, &o, &maintable, mainreq);

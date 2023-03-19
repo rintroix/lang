@@ -1,11 +1,14 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include <stdio.h>
+
 #define log(...) _log(__VA_ARGS__, "\n")
 #define _log(FMT, ...)                                                         \
-	printf("%s:%s:%d " FMT "%s",                                           \
-	       strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__, \
-	       __func__, __LINE__, __VA_ARGS__)
+	fprintf(stderr, "%s:%s:%d " FMT "%s",                                  \
+		strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1            \
+				       : __FILE__,                             \
+		__func__, __LINE__, __VA_ARGS__)
 
 #define _elog(CODE, ...) (log(__VA_ARGS__), abort(), exit(CODE))
 
