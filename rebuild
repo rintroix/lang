@@ -40,7 +40,7 @@ _err() {
 _dir="${XDG_RUNTIME_DIR:-${TMP:-/tmp}}"
 T="$(mktemp -d "${_dir}/${0##*/}.XXXXXX" 2>/dev/null || true)"
 
-[ -d "${T:-}" ] || _err 1 "temp no exist"
+[ -d "${T:-}" ] || _err 1 "temp missing"
 
 _dbg() { [ "$D" ] || return 0; echo >&2 "$@"; }
 
@@ -55,9 +55,13 @@ DO() {
 	local cmd="$BUILD/$1"; shift
 	_dbg DO "$cmd" "$@"
 	WANT "$cmd"
-	[ -f "$cmd" ] || _err 1 "command no exist: $cmd"
-	[ -x "$cmd" ] || _err 1 "command no exec: $cmd"
-	"$cmd" "$@"
+	[ -f "$cmd" ] || _err 1 "command missing: $cmd"
+	[ -x "$cmd" ] || _err 1 "command noexec: $cmd"
+	if "$cmd" "$@"; then
+		return 0
+	else
+		return $?
+	fi
 }
 
 TFIND() {

@@ -5,7 +5,23 @@ alias t=tools
 alias d=debug
 
 run() {
-	build && DO app ex.r
+	build && DO app ex.r | tee "$BUILD/ex.c"
+	cat > "$BUILD/bar.c" << EOF
+		int bar(int x, int y) {
+			return x * y + 10;
+		}
+EOF
+	cat > "$BUILD/bar.h" << EOF
+		int bar(int x, int y);
+EOF
+	RE $BUILD/ex.c
+	RE $BUILD/bar.c
+	LD ex $BUILD/bar.o $BUILD/ex.o 
+	if DO ex; then
+		echo >&2 RC 0
+	else
+		echo >&2 RC $?
+	fi
 }
 
 tools() {

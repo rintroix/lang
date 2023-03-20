@@ -1,7 +1,7 @@
+(extern fn bar int ((x int) (y int)))
+
 (fn foo (x (y int)) x)
-(fn add (a b) . foo a b)
-(fn add float ((a int) (b int)) . foo a b)
+(fn add int (a b) . foo a b)
 
 (fn main int ()
-  (foo 1 2)
-  (add 3 4))
+  (bar 2 (add 3 100500)))

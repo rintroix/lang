@@ -11,6 +11,13 @@
 // TODO propagate through assignment
 // TODO call fetches actual generated fn
 
+static inline type tint(size_t bits)
+{
+	return (type){.tag = T_INTEGER, .integer = {.bits = bits}};
+}
+
+ast buggyast = (ast){.tag = A_ID, .id = {.tag = I_KW, .name = "!BUG!"}};
+
 ast parse(context *ctx, typetable *table, ast a);
 void compile(context *ctx, output *o, typetable *table, callreq req);
 
@@ -26,15 +33,67 @@ typedef enum e_flags {
 
 static inline enum e_flags noret(enum e_flags f) { return f & ~F_RETURN; }
 
-int same_type(type a, type b) {
+char *show_type(type t)
+{
+	switch (t.tag) {
+	case T_UNKNOWN: {
+		return "UNKNOWN";
+	} break;
+	case T_INTEGER: {
+		switch (t.integer.bits) {
+		case 0:
+			return "int";
+		case 16:
+			return "i16";
+		case 32:
+			return "i32";
+		case 64:
+			return "i64";
+		default:
+			bug("wrong integer bits");
+		}
+	} break;
+	case T_FLOATING: {
+		switch (t.integer.bits) {
+		case 0:
+			return "float";
+		case 16:
+			return "f16";
+		case 32:
+			return "f32";
+		case 64:
+			return "f64";
+		default:
+			bug("wrong floating bits");
+		}
+	} break;
+	case T_STRING: {
+		todo;
+	} break;
+	case T_COMPOUND: {
+		todo;
+	} break;
+	}
+
+	bug("wrong type tag: %d", t.tag);
+}
+
+int same_type(type a, type b)
+{
 	if (a.tag != b.tag)
 		return 0;
 
 	switch (a.tag) {
-	case T_SIMPLE: {
-		return 0 == strcmp(a.name, b.name);
+	case T_INTEGER: {
+		return a.integer.bits == b.integer.bits;
 	} break;
 	case T_COMPOUND: {
+		todo;
+	} break;
+	case T_FLOATING: {
+		todo;
+	} break;
+	case T_STRING: {
 		todo;
 	} break;
 	case T_UNKNOWN: {
@@ -45,7 +104,7 @@ int same_type(type a, type b) {
 	bug("unreachable");
 }
 
-type unify_types(type a, type b)
+type _unify_types(type a, type b)
 {
 	if (a.tag == T_UNKNOWN)
 		return b;
@@ -54,31 +113,62 @@ type unify_types(type a, type b)
 		return a;
 
 	if (b.tag != a.tag)
-		error("can't unify different tags yet");
+		bug("unify different tags");
 
 	switch (a.tag) {
 	case T_UNKNOWN: {
 		bug("unknown type");
 	} break;
+	case T_FLOATING: {
+		return a.floating.bits > b.floating.bits ? a : b;
+	} break;
+	case T_STRING: {
+		todo;
+	} break;
 	case T_COMPOUND: {
 		todo;
 	} break;
-	case T_SIMPLE: {
-		bug_if_not(a.name);
-		bug_if_not(b.name);
-		if (0 == strcmp(a.name, b.name))
+	case T_INTEGER: {
+		size_t abits = a.integer.bits;
+		size_t bbits = b.integer.bits;
+		if (a.solid && b.solid) {
+			if (abits != bbits)
+				bug("type mismatch: %s! vs %s!", show_type(a),
+				    show_type(b));
 			return a;
-		bug("unify simple types: %s vs %s", a.name, b.name);
+		}
+
+		if (a.solid) {
+			if (abits < bbits)
+				bug("type mismatch: %s! vs %s", show_type(a),
+				    show_type(b));
+
+			return a;
+		}
+
+		if (b.solid) {
+			if (abits > bbits)
+				bug("type mismatch: %s vs %s!", show_type(a),
+				    show_type(b));
+
+			return a;
+		}
+
+		return abits > bbits ? a : b;
 	} break;
 	}
 
 	bug("unreachable");
 }
 
-size_t add_type(typetable *table, type t)
+type unify_types(type a, type b)
 {
-	return push(table->types, t);
+	type r = _unify_types(a, b);
+	log("UNIFY: %s + %s = %s", show_type(a), show_type(b), show_type(r));
+	return r;
 }
+
+size_t add_type(typetable *table, type t) { return push(table->types, t); }
 
 void change_type(typetable *table, size_t index, type t)
 {
@@ -92,10 +182,7 @@ size_t add_unknown(typetable *table)
 	    (type){.tag = T_UNKNOWN, .unknown = {.index = vlen(table->types)}});
 }
 
-size_t add_opreq(typetable *table, opreq o)
-{
-	return push(table->ops, o);
-}
+size_t add_opreq(typetable *table, opreq o) { return push(table->ops, o); }
 
 size_t add_callreq(typetable *table, callreq c)
 {
@@ -132,16 +219,37 @@ typetable clone_table(typetable table)
 	};
 }
 
-int same_table(typetable a, typetable b) {
+int same_table(typetable a, typetable b)
+{
 	if (a.arity != b.arity)
 		return 0;
 
-	vloop(a.types, t, 0, a.arity, i) {
+	vloop(a.types, t, 0, a.arity, i)
+	{
 		if (!same_type(t, vget(b.types, i)))
 			return 0;
 	}
 
 	return 1;
+}
+
+type find_simple_type(context *ctx, char *name)
+{
+	for (; ctx; ctx = ctx->next) {
+		if (!ctx->types)
+			continue;
+
+		veach(ctx->types, t) {}
+	}
+	// TODO actually find
+
+	if (0 == strcmp("int", name))
+		return tint(0);
+
+	if (0 == strcmp("float", name))
+		return (type){.tag = T_FLOATING, .integer = {.bits = 0}};
+
+	error("type not found: %s", name);
 }
 
 ast *alift(ast a)
@@ -203,33 +311,18 @@ int is(ast a, ast *pat)
 	bug("unhandled %d", pat->tag);
 }
 
-char *show_type(type t)
+char *show_sig(typetable table)
 {
-	switch (t.tag) {
-	case T_SIMPLE: {
-		return t.name;
-	} break;
-	case T_UNKNOWN: {
-		return "UNKNOWN";
-	} break;
-	case T_COMPOUND: {
-		todo;
-	} break;
-	}
-
-	bug("wrong type tag: %d", t.tag);
-}
-
-char *show_sig(typetable table) {
 	deq(char) str = adeq(char);
 	umd_append_fmt(str, "[");
-	vloop(table.types, t, 0, table.arity + 1, i) {
+	vloop(table.types, t, 0, table.arity + 1, i)
+	{
 		if (i != 0)
 			umd_append_fmt(str, ", ");
 		umd_append_fmt(str, "%s", show_type(t));
 	}
 	umd_append_fmt(str, "]");
-	
+
 	return umd_to_cstr(str);
 }
 
@@ -323,20 +416,21 @@ void printl_ast(ast a)
 	printf("\n");
 }
 
-type list2type(vec(ast) items, size_t start, size_t end)
+type list2type(context *ctx, vec(ast) items, size_t start, size_t end)
 {
 	check(end > start);
 
 	if (end - start == 1) {
 		ast *head = vat(items, start);
 		check(head->tag == A_ID && head->id.tag == I_WORD);
-		return (type){.tag = T_SIMPLE, .name = head->id.name};
+		char *name = head->id.name;
+		return find_simple_type(ctx, name);
 	}
 
 	todo; // compound and funs
 }
 
-vec(define) funargs(typetable *tt, vec(ast) list)
+vec(define) funargs(context *ctx, typetable *table, vec(ast) list)
 {
 	vec(define) out = avec(define);
 
@@ -345,7 +439,7 @@ vec(define) funargs(typetable *tt, vec(ast) list)
 		switch (it.tag) {
 		case A_ID: {
 			check(it.id.tag == I_WORD);
-			size_t index = add_unknown(tt);
+			size_t index = add_unknown(table);
 			push(out, (define){.name = it.id.name, .index = index});
 		} break;
 
@@ -355,8 +449,9 @@ vec(define) funargs(typetable *tt, vec(ast) list)
 			ast head = vget(items, 0);
 			check(head.tag == A_ID && head.id.tag == I_WORD);
 			char *name = head.id.name;
-			size_t index =
-			    add_type(tt, list2type(items, 1, vlen(items)));
+			type t = list2type(ctx, items, 1, vlen(items));
+			t.solid = 1;
+			size_t index = add_type(table, t);
 			push(out, (define){.name = name, .index = index});
 		} break;
 
@@ -469,7 +564,8 @@ ast parse_block(context *ctx, typetable *table, vec(ast) list, size_t start,
 	return ablock(0, defs, items); // TODO functions
 }
 
-void back_propagate(typetable *table, ast *a, size_t index) {
+void back_propagate(typetable *table, ast *a, size_t index)
+{
 	a->index = index;
 	switch (a->tag) {
 	case A_REF: {
@@ -504,7 +600,7 @@ int make_fn(context *ctx, char *name, type *fret, vec(ast) args, vec(ast) body)
 	size_t retindex = fret ? add_type(&table, *fret) : add_unknown(&table);
 
 	// TODO funargs require context as well, inits might need it
-	vec(define) defs = funargs(&table, args);
+	vec(define) defs = funargs(ctx, &table, args);
 	table.arity = vlen(args);
 	context local = (context){.defines = defs, .next = ctx};
 	ast init = parse_block(&local, &table, body, 0, vlen(body)); // TODO
@@ -521,12 +617,37 @@ int make_fn(context *ctx, char *name, type *fret, vec(ast) args, vec(ast) body)
 	return 1;
 }
 
+int make_extern(context *ctx, char *name, type ret, vec(ast) args)
+{
+	for (; ctx; ctx = ctx->next) {
+		if (!ctx->functions)
+			continue;
+
+		typetable table = new_table();
+		size_t index = add_type(&table, ret);
+		define self =
+		    (define){.name = name, .index = index, .init = buggyast};
+		vec(define) defs = funargs(ctx, &table, args);
+		table.arity = vlen(defs);
+
+		function f = fn(self, defs, table);
+		f.flags = FUN_EXTERN;
+
+		push(ctx->functions, f);
+
+		return 1;
+	}
+
+	bug("no externs");
+}
+
 int parse_top_one(context *ctx, vec(ast) items)
 {
 	if (match(items, W("fn"), W(0), W(0), L(0))) {
 		char *name = vat(items, 1)->id.name;
 		// TODO extraction hack
-		type t = list2type(items, 2, 3);
+		type t = list2type(ctx, items, 2, 3);
+		t.solid = 1;
 		vec(ast) args = vat(items, 3)->list.items;
 		vec(ast) body = vslice(items, 4, vlen(items));
 		return make_fn(ctx, name, &t, args, body);
@@ -545,6 +666,15 @@ int parse_top_one(context *ctx, vec(ast) items)
 		return 1;
 	}
 
+	if (match(items, W("extern"), W("fn"), W(0), W(0), L(0))) {
+		char *name = vat(items, 2)->id.name;
+		// TODO extraction hack
+		type t = list2type(ctx, items, 3, 4);
+		t.solid = 1;
+		vec(ast) args = vat(items, 4)->list.items;
+		return make_extern(ctx, name, t, args);
+	}
+
 	return 0;
 }
 
@@ -554,11 +684,21 @@ int types_compatible(type a, type b)
 		return 1;
 
 	if (a.tag != b.tag)
-		return 0;
+		return 0; // TODO promotions
 
 	switch (a.tag) {
-	case T_SIMPLE: {
-		return 0 == strcmp(a.name, b.name);
+	case T_INTEGER: {
+		if (a.integer.bits == 0 || b.integer.bits == 0)
+			return 1;
+		if (a.integer.bits == b.integer.bits)
+			return 1;
+		return 0;
+	} break;
+	case T_FLOATING: {
+		todo;
+	} break;
+	case T_STRING: {
+		todo;
 	} break;
 	case T_COMPOUND: {
 		todo;
@@ -597,6 +737,8 @@ vec(function *) find_candidates(context *ctx, typetable *table, char *name)
 		{
 			if (0 != strcmp(name, f.self.name))
 				continue;
+
+			dbg("name good: %s", name);
 
 			if (table_compatible(*table, f.table)) {
 				push(out, fp);
@@ -699,8 +841,7 @@ ast parse(context *ctx, typetable *table, ast a)
 			return find_ref(ctx, a.id.name);
 		} break;
 		case I_INT: {
-			a.index = add_type(
-			    table, (type){.tag = T_SIMPLE, .name = "int"});
+			a.index = add_type(table, tint(0));
 			return a;
 		} break;
 		case I_KW: {
@@ -734,7 +875,8 @@ __attribute__((format(printf, 2, 3))) void odef(output *o,
 
 int oreg(output *o, function *fp, typetable table)
 {
-	veach(o->implementations, imp) {
+	veach(o->implementations, imp)
+	{
 		if (fp != imp.fp)
 			continue;
 
@@ -850,16 +992,18 @@ ast returning(size_t tindex, ast a)
 
 void compile_fn(context *ctx, output *o, typetable *table, function *fun)
 {
-	veach(table->calls, req, i) {
+	veach(table->calls, req, i)
+	{
 		typetable t = new_table();
 		add_type(&t, get_type(table, req.ret));
 		t.arity = vlen(req.args);
-		veach(req.args, argi) {
-			add_type(&t, get_type(table, argi));
-		}
+		veach(req.args, argi) { add_type(&t, get_type(table, argi)); }
 		compile(ctx, o, &t, req);
 	}
-	
+
+	if (fun->flags & FUN_EXTERN)
+		return;
+
 	char *ret = show_type(get_type(table, 0));
 	char *name = fun->self.name;
 
@@ -932,8 +1076,7 @@ int main(int argc, char **argv)
 
 	context topctx = parse_top(&upper, tops);
 	typetable maintable = new_table();
-	size_t mainret =
-	    add_type(&maintable, (type){.tag = T_SIMPLE, .name = "int"});
+	size_t mainret = add_type(&maintable, tint(0));
 	vec(size_t) mainargs = avec(size_t);
 	callreq mainreq =
 	    (callreq){.name = "main", .ret = mainret, .args = mainargs};
@@ -944,10 +1087,12 @@ int main(int argc, char **argv)
 	    .implementations = avec(impl),
 	};
 
+	odec(&o, "#include<stdint.h>\n");
+
 	compile(&topctx, &o, &maintable, mainreq);
 
-	printf("%s\n", umd_to_cstr(o.declarations));
-	printf("%s\n", umd_to_cstr(o.definitions));
+	printf("%s", umd_to_cstr(o.declarations));
+	printf("%s", umd_to_cstr(o.definitions));
 
 	log("END");
 }

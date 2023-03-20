@@ -27,7 +27,6 @@ enum e_type {
 	T_INTEGER,
 	T_FLOATING,
 	T_STRING,
-	T_SIMPLE,
 	T_COMPOUND,
 };
 
@@ -35,6 +34,7 @@ typedef struct ast ast;
 
 typedef struct type {
 	enum e_type tag;
+	int solid;
 	char *name;
 	union {
 		struct {
@@ -133,10 +133,15 @@ struct define {
 	ast init;
 };
 
+enum e_funflags {
+	FUN_EXTERN = 1 << 1,	 
+};
+
 typedef struct function {
 	define self;
 	vec(define) args;
 	typetable table;
+	enum e_funflags flags;
 } function;
 
 #define def(NAME, INDEX, INIT)                                                 \
@@ -174,6 +179,7 @@ typedef struct context {
 	vec(define) defines;
 	vec(macro) macros;
 	vec(function) functions;
+	vec(type) types;
 	struct context *next;
 } context;
 
