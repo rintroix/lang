@@ -7,8 +7,6 @@
 #include "parser.h"
 #include "um/um.h"
 
-// TODO deduplicate dependencies
-// TODO propagate ret type
 // TODO lets
 // TODO propagate through assignment
 // TODO call fetches actual generated fn
@@ -40,7 +38,37 @@ int same_type(type a, type b) {
 		todo;
 	} break;
 	case T_UNKNOWN: {
-		bug("unknowns are not compatible");
+		return a.unknown.index == b.unknown.index;
+	} break;
+	}
+
+	bug("unreachable");
+}
+
+type unify_types(type a, type b)
+{
+	if (a.tag == T_UNKNOWN)
+		return b;
+
+	if (b.tag == T_UNKNOWN)
+		return a;
+
+	if (b.tag != a.tag)
+		error("can't unify different tags yet");
+
+	switch (a.tag) {
+	case T_UNKNOWN: {
+		bug("unknown type");
+	} break;
+	case T_COMPOUND: {
+		todo;
+	} break;
+	case T_SIMPLE: {
+		bug_if_not(a.name);
+		bug_if_not(b.name);
+		if (0 == strcmp(a.name, b.name))
+			return a;
+		bug("unify simple types: %s vs %s", a.name, b.name);
 	} break;
 	}
 
@@ -52,6 +80,18 @@ size_t add_type(typetable *table, type t)
 	return push(table->types, t);
 }
 
+void change_type(typetable *table, size_t index, type t)
+{
+	*vat(table->types, index) = t;
+}
+
+size_t add_unknown(typetable *table)
+{
+	return push(
+	    table->types,
+	    (type){.tag = T_UNKNOWN, .unknown = {.index = vlen(table->types)}});
+}
+
 size_t add_opreq(typetable *table, opreq o)
 {
 	return push(table->ops, o);
@@ -60,6 +100,11 @@ size_t add_opreq(typetable *table, opreq o)
 size_t add_callreq(typetable *table, callreq c)
 {
 	return push(table->calls, c);
+}
+
+callreq *get_callreqp(typetable *table, size_t index)
+{
+	return vat(table->calls, index);
 }
 
 type get_type(typetable *table, size_t index)
@@ -175,6 +220,19 @@ char *show_type(type t)
 	bug("wrong type tag: %d", t.tag);
 }
 
+char *show_sig(typetable table) {
+	deq(char) str = adeq(char);
+	umd_append_fmt(str, "[");
+	vloop(table.types, t, 0, table.arity + 1, i) {
+		if (i != 0)
+			umd_append_fmt(str, ", ");
+		umd_append_fmt(str, "%s", show_type(t));
+	}
+	umd_append_fmt(str, "]");
+	
+	return umd_to_cstr(str);
+}
+
 type ttrace(type t) { todo; }
 
 int has(vec(ast) list, ast *pattern)
@@ -287,7 +345,7 @@ vec(define) funargs(typetable *tt, vec(ast) list)
 		switch (it.tag) {
 		case A_ID: {
 			check(it.id.tag == I_WORD);
-			size_t index = add_type(tt, (type){.tag = T_UNKNOWN});
+			size_t index = add_unknown(tt);
 			push(out, (define){.name = it.id.name, .index = index});
 		} break;
 
@@ -364,7 +422,7 @@ ast parse_operator(context *ctx, typetable *table, vec(ast) list, size_t start)
 	ast left = parse(ctx, table, atom_or_list(list, start, pos));
 	ast right = parse_operator(ctx, table, list, pos + 1);
 	ast out = aoper(op->id.name, lift(left), lift(right));
-	out.index = add_type(table, (type){.tag = T_UNKNOWN});
+	out.index = add_unknown(table);
 	out.oper.index = add_opreq(table, (opreq){.name = op->id.name,
 						  .ret = out.index,
 						  .left = left.index,
@@ -411,24 +469,74 @@ ast parse_block(context *ctx, typetable *table, vec(ast) list, size_t start,
 	return ablock(0, defs, items); // TODO functions
 }
 
+void back_propagate(typetable *table, ast *a, size_t index) {
+	a->index = index;
+	switch (a->tag) {
+	case A_REF: {
+		a->ref.def->index = index;
+	} break;
+	case A_BLOCK: {
+		vec(ast) items = a->block.items;
+		bug_if_not(vlen(items));
+		back_propagate(table, vat(items, vlen(items) - 1), index);
+	} break;
+	case A_OPER: {
+		bug("oper");
+	} break;
+	case A_CALL: {
+		callreq *cr = get_callreqp(table, a->call.req);
+		cr->ret = index;
+	} break;
+	case A_LIST: {
+		bug("list");
+	} break;
+	case A_ID: {
+		bug("id");
+	} break;
+	}
+
+	return;
+}
+
+int make_fn(context *ctx, char *name, type *fret, vec(ast) args, vec(ast) body)
+{
+	typetable table = new_table();
+	size_t retindex = fret ? add_type(&table, *fret) : add_unknown(&table);
+
+	// TODO funargs require context as well, inits might need it
+	vec(define) defs = funargs(&table, args);
+	table.arity = vlen(args);
+	context local = (context){.defines = defs, .next = ctx};
+	ast init = parse_block(&local, &table, body, 0, vlen(body)); // TODO
+	back_propagate(&table, &init, 0);
+	type iret = get_type(&table, init.index);
+	if (fret) {
+		type ret = unify_types(*fret, iret);
+		change_type(&table, 0, ret);
+	}
+
+	define self = def(name, retindex, init);
+
+	push(ctx->functions, fn(self, defs, table));
+	return 1;
+}
+
 int parse_top_one(context *ctx, vec(ast) items)
 {
 	if (match(items, W("fn"), W(0), W(0), L(0))) {
 		char *name = vat(items, 1)->id.name;
-		typetable table = new_table();
+		// TODO extraction hack
+		type t = list2type(items, 2, 3);
+		vec(ast) args = vat(items, 3)->list.items;
+		vec(ast) body = vslice(items, 4, vlen(items));
+		return make_fn(ctx, name, &t, args, body);
+	}
 
-		 // TODO extraction hack
-		size_t retindex = add_type(&table, list2type(items, 2, 3));
-
-		// TODO funargs require context as well, inits might need it
-		vec(define) args = funargs(&table, vat(items, 3)->list.items);
-		table.arity = vlen(args);
-		context local = (context){.defines = args, .next = ctx};
-		ast init = parse_block(&local, &table, items, 4, vlen(items));
-		define self = def(name, retindex, init);
-
-		push(ctx->functions, fn(self, args, table));
-		return 1;
+	if (match(items, W("fn"), W(0), L(0))) {
+		char *name = vat(items, 1)->id.name;
+		vec(ast) args = vat(items, 2)->list.items;
+		vec(ast) body = vslice(items, 3, vlen(items));
+		return make_fn(ctx, name, 0, args, body);
 	}
 
 	if (match(items, W("let"))) {
@@ -539,8 +647,8 @@ ast parse_list(context *ctx, typetable *table, vec(ast) items)
 	}
 
 	ast out = acall(name, args);
-	out.index = add_type(table, (type){.tag = T_UNKNOWN});
-	out.call.index = add_callreq(
+	out.index = add_unknown(table);
+	out.call.req = add_callreq(
 	    table,
 	    (callreq){.name = name, .ret = out.index, .args = arg_indices});
 
@@ -604,36 +712,6 @@ ast parse(context *ctx, typetable *table, ast a)
 		}
 	} break;
 	}
-}
-
-type unify_types(type a, type b)
-{
-	if (a.tag == T_UNKNOWN)
-		return b;
-
-	if (b.tag == T_UNKNOWN)
-		return a;
-
-	if (b.tag != a.tag)
-		error("can't unify different tags yet");
-
-	switch (a.tag) {
-	case T_UNKNOWN: {
-		bug("unknown type");
-	} break;
-	case T_COMPOUND: {
-		todo;
-	} break;
-	case T_SIMPLE: {
-		bug_if_not(a.name);
-		bug_if_not(b.name);
-		if (0 == strcmp(a.name, b.name))
-			return a;
-		bug("unify simple types: %s vs %s", a.name, b.name);
-	} break;
-	}
-
-	bug("unreachable");
 }
 
 __attribute__((format(printf, 2, 3))) void odec(output *o,

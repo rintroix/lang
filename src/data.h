@@ -22,7 +22,14 @@
 #define deach(...) umd_each(__VA_ARGS__)
 #define dloop(...) umd_loop(__VA_ARGS__)
 
-enum e_type { T_UNKNOWN = 1, T_SIMPLE, T_COMPOUND };
+enum e_type {
+	T_UNKNOWN = 1,
+	T_INTEGER,
+	T_FLOATING,
+	T_STRING,
+	T_SIMPLE,
+	T_COMPOUND,
+};
 
 typedef struct ast ast;
 
@@ -33,6 +40,18 @@ typedef struct type {
 		struct {
 			vec(struct type) items;
 		} compound;
+
+		struct {
+			size_t bits;
+		} integer;
+
+		struct {
+			size_t bits;
+		} floating;
+
+		struct {
+			size_t index;
+		} unknown;
 	};
 } type;
 
@@ -83,7 +102,7 @@ struct ast {
 
 		struct {
 			char *name;
-			size_t index;
+			size_t req;
 			vec(ast) args;
 		} call;
 
