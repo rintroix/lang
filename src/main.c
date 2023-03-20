@@ -16,7 +16,7 @@ static inline type tint(size_t bits)
 	return (type){.tag = T_INTEGER, .integer = {.bits = bits}};
 }
 
-ast buggyast = (ast){.tag = A_ID, .id = {.tag = I_KW, .name = "!BUG!"}};
+ast buggyast = (ast){.tag = A_KW, .kw = {.name = "!BUG!"}};
 
 ast parse(context *ctx, typetable *table, ast a);
 void compile(context *ctx, output *o, typetable *table, callreq req);
@@ -275,27 +275,45 @@ int is(ast a, ast *pat)
 		return 0;
 
 	switch (pat->tag) {
+	case A_FLOAT: {
+		todo;
+	} break;
+	case A_INT: {
+		todo;
+	} break;
+	case A_DIAMOND: {
+		todo;
+	} break;
+	case A_KW: {
+		todo;
+	} break;
 	case A_OPER: {
 		todo;
 	} break;
 	case A_REF: {
-		todo;
-	} break;
-	case A_BLOCK: {
-		todo;
-	} break;
-	case A_ID: {
-		if (pat->id.tag != a.id.tag)
-			return 0;
-
-		if (!pat->id.name)
+		if (!pat->ref.name)
 			return 1;
 
-		if (0 == strcmp(pat->id.name, a.id.name))
+		if (0 == strcmp(pat->ref.name, a.ref.name))
 			return 1;
 
 		return 0;
 	} break;
+	case A_BLOCK: {
+		todo;
+	} break;
+	// case A_ID: {
+	// 	if (pat->id.tag != a.id.tag)
+	// 		return 0;
+
+	// 	if (!pat->id.name)
+	// 		return 1;
+
+	// 	if (0 == strcmp(pat->id.name, a.id.name))
+	// 		return 1;
+
+	// 	return 0;
+	// } break;
 
 	case A_LIST: {
 		if (!pat->list.items)
@@ -346,66 +364,66 @@ void cadd(vec(char) out, char *s)
 	}
 }
 
-void _show_ast(vec(char) out, ast a)
+void _show_ast(deq(char) s, ast a)
 {
+	
 	switch (a.tag) {
+	case A_FLOAT: {
+		todo;
+	} break;
+	case A_INT: {
+		todo;
+	} break;
+	case A_DIAMOND: {
+		todo;
+	} break;
+	case A_KW: {
+		todo;
+	} break;
 	case A_BLOCK: {
 		todo;
 	} break;
 	case A_REF: {
-		cadd(out, "<");
-		cadd(out, a.ref.def->name);
-		cadd(out, ">");
+		char *name = a.ref.def ? a.ref.def->name : a.ref.name;
+		dprint(s, "%s", name);
 	} break;
 	case A_LIST: {
-		cadd(out, "(");
+		dprint(s, "(");
 		veach(a.list.items, it, i)
 		{
 			if (i != 0)
-				cadd(out, " ");
-			_show_ast(out, it);
+				dprint(s, " ");
+			_show_ast(s, it);
 		}
-		cadd(out, ")");
+		dprint(s, ")");
 	} break;
 
 	case A_CALL: {
-		cadd(out, a.call.name);
-		cadd(out, "(");
+		dprint(s, "%s", a.call.name);
+		dprint(s, "(");
 		veach(a.call.args, arg, i)
 		{
 			if (i != 0)
-				cadd(out, " ");
-			_show_ast(out, arg);
+				dprint(s, " ");
+			_show_ast(s, arg);
 		}
-		cadd(out, ")");
+		dprint(s, ")");
 	} break;
 
-	case A_ID:
-		if (a.id.tag == I_KW)
-			cadd(out, ":");
-		cadd(out, a.id.name);
-		break;
-
 	case A_OPER:
-		cadd(out, "(");
-		_show_ast(out, *a.oper.left);
-		cadd(out, " ");
-		cadd(out, a.oper.name);
-		cadd(out, " ");
-		_show_ast(out, *a.oper.right);
-		cadd(out, ")");
+		dprint(s, "(");
+		_show_ast(s, *a.oper.left);
+		dprint(s, " %s ", a.oper.name);
+		_show_ast(s, *a.oper.right);
+		dprint(s, ")");
 		break;
 	}
 }
 
-char *show_ast(ast a)
-{
-	vec(char) chars = avec(char);
-	_show_ast(chars, a);
-	char *out = malloc(vlen(chars) + 1);
-	veach(chars, c, i) { out[i] = c; }
-	out[vlen(chars)] = '\0';
-	return out;
+char * show_ast(ast a) {
+	deq(char) s = adeq(char);
+	_show_ast(s, a);
+	return umd_to_cstr(s);
 }
 
 void print_ast(ast a) { printf("%s", show_ast(a)); }
@@ -422,8 +440,8 @@ type list2type(context *ctx, vec(ast) items, size_t start, size_t end)
 
 	if (end - start == 1) {
 		ast *head = vat(items, start);
-		check(head->tag == A_ID && head->id.tag == I_WORD);
-		char *name = head->id.name;
+		check(head->tag == A_REF);
+		char *name = head->ref.name;
 		return find_simple_type(ctx, name);
 	}
 
@@ -437,18 +455,17 @@ vec(define) funargs(context *ctx, typetable *table, vec(ast) list)
 	veach(list, it)
 	{
 		switch (it.tag) {
-		case A_ID: {
-			check(it.id.tag == I_WORD);
+		case A_REF: {
 			size_t index = add_unknown(table);
-			push(out, (define){.name = it.id.name, .index = index});
+			push(out, (define){.name = it.ref.name, .index = index});
 		} break;
 
 		case A_LIST: {
 			vec(ast) items = it.list.items;
 			check(vlen(items) > 1);
 			ast head = vget(items, 0);
-			check(head.tag == A_ID && head.id.tag == I_WORD);
-			char *name = head.id.name;
+			check(head.tag == A_REF);
+			char *name = head.ref.name;
 			type t = list2type(ctx, items, 1, vlen(items));
 			t.solid = 1;
 			size_t index = add_type(table, t);
@@ -512,13 +529,14 @@ ast parse_operator(context *ctx, typetable *table, vec(ast) list, size_t start)
 	assert(pos > start);
 
 	ast *op = vat(list, pos);
-	assert(op->tag == A_ID && op->id.tag == I_OP);
+	assert(op->tag == A_OPER);
+	char *name = op->oper.name;
 
 	ast left = parse(ctx, table, atom_or_list(list, start, pos));
 	ast right = parse_operator(ctx, table, list, pos + 1);
-	ast out = aoper(op->id.name, lift(left), lift(right));
+	ast out = aoper(name, lift(left), lift(right));
 	out.index = add_unknown(table);
-	out.oper.index = add_opreq(table, (opreq){.name = op->id.name,
+	out.oper.index = add_opreq(table, (opreq){.name = name,
 						  .ret = out.index,
 						  .left = left.index,
 						  .right = right.index});
@@ -568,6 +586,18 @@ void back_propagate(typetable *table, ast *a, size_t index)
 {
 	a->index = index;
 	switch (a->tag) {
+	case A_FLOAT: {
+		todo;
+	} break;
+	case A_INT: {
+		todo;
+	} break;
+	case A_DIAMOND: {
+		todo;
+	} break;
+	case A_KW: {
+		todo;
+	} break;
 	case A_REF: {
 		a->ref.def->index = index;
 	} break;
@@ -585,9 +615,6 @@ void back_propagate(typetable *table, ast *a, size_t index)
 	} break;
 	case A_LIST: {
 		bug("list");
-	} break;
-	case A_ID: {
-		bug("id");
 	} break;
 	}
 
@@ -643,8 +670,8 @@ int make_extern(context *ctx, char *name, type ret, vec(ast) args)
 
 int parse_top_one(context *ctx, vec(ast) items)
 {
-	if (match(items, W("fn"), W(0), W(0), L(0))) {
-		char *name = vat(items, 1)->id.name;
+	if (match(items, R("fn"), R(0), R(0), L(0))) {
+		char *name = vat(items, 1)->ref.name;
 		// TODO extraction hack
 		type t = list2type(ctx, items, 2, 3);
 		t.solid = 1;
@@ -653,21 +680,30 @@ int parse_top_one(context *ctx, vec(ast) items)
 		return make_fn(ctx, name, &t, args, body);
 	}
 
-	if (match(items, W("fn"), W(0), L(0))) {
-		char *name = vat(items, 1)->id.name;
+	if (match(items, R("fn"), R(0), L(0))) {
+		char *name = vat(items, 1)->ref.name;
 		vec(ast) args = vat(items, 2)->list.items;
 		vec(ast) body = vslice(items, 3, vlen(items));
 		return make_fn(ctx, name, 0, args, body);
 	}
 
-	if (match(items, W("let"))) {
+	if (match(items, R("let"))) {
 		todo;
 		// if def, put to defs
 		return 1;
 	}
 
-	if (match(items, W("extern"), W("fn"), W(0), W(0), L(0))) {
-		char *name = vat(items, 2)->id.name;
+	if (match(items, R("extern"), R("fn"), R(0), R(0), L(0))) {
+		char *name = vat(items, 2)->ref.name;
+		// TODO extraction hack
+		type t = list2type(ctx, items, 3, 4);
+		t.solid = 1;
+		vec(ast) args = vat(items, 4)->list.items;
+		return make_extern(ctx, name, t, args);
+	}
+
+	if (match(items, R("include"), R("fn"), R(0), R(0), L(0))) {
+		char *name = vat(items, 2)->ref.name;
 		// TODO extraction hack
 		type t = list2type(ctx, items, 3, 4);
 		t.solid = 1;
@@ -776,8 +812,8 @@ ast parse_list(context *ctx, typetable *table, vec(ast) items)
 	}
 
 	ast *head = vat(items, 0);
-	assert(head->tag == A_ID && head->id.tag == I_WORD);
-	char *name = head->id.name;
+	assert(head->tag == A_REF);
+	char *name = head->ref.name;
 
 	vec(ast) args = avec(ast);
 	vec(size_t) arg_indices = avec(size_t);
@@ -797,7 +833,7 @@ ast parse_list(context *ctx, typetable *table, vec(ast) items)
 	return out;
 }
 
-ast find_ref(context *ctx, char *name)
+define *find_def(context *ctx, char *name)
 {
 	for (; ctx; ctx = ctx->next) {
 		if (!ctx->defines)
@@ -808,9 +844,7 @@ ast find_ref(context *ctx, char *name)
 			if (0 != strcmp(name, d.name))
 				continue;
 
-			return ((ast){.tag = A_REF,
-				      .index = d.index,
-				      .ref = {.def = dp}});
+			return dp;
 		}
 	}
 
@@ -820,8 +854,23 @@ ast find_ref(context *ctx, char *name)
 ast parse(context *ctx, typetable *table, ast a)
 {
 	switch (a.tag) {
+	case A_FLOAT: {
+		todo;
+	} break;
+	case A_INT: {
+		a.index = add_type(table, tint(0));
+		return a;
+	} break;
+	case A_DIAMOND: {
+		todo;
+	} break;
+	case A_KW: {
+		todo;
+	} break;
 	case A_REF: {
-		bug("ref");
+		a.ref.def = find_def(ctx, a.ref.name);
+		a.index = a.ref.def->index;
+		return a;
 	} break;
 	case A_BLOCK: {
 		bug("block");
@@ -833,24 +882,7 @@ ast parse(context *ctx, typetable *table, ast a)
 		bug("call");
 	} break;
 	case A_LIST: {
-		return (parse_list(ctx, table, a.list.items));
-	} break;
-	case A_ID: {
-		switch (a.id.tag) {
-		case I_WORD: {
-			return find_ref(ctx, a.id.name);
-		} break;
-		case I_INT: {
-			a.index = add_type(table, tint(0));
-			return a;
-		} break;
-		case I_KW: {
-			todo;
-		} break;
-		case I_OP: {
-			todo;
-		} break;
-		}
+		return parse_list(ctx, table, a.list.items);
 	} break;
 	}
 }
@@ -891,6 +923,18 @@ int oreg(output *o, function *fp, typetable table)
 void compile_ast(output *o, typetable *table, flags fl, ast a, int indent)
 {
 	switch (a.tag) {
+	case A_FLOAT: {
+		todo;
+	} break;
+	case A_INT: {
+		odef(o, "%d", a.integer.value);
+	} break;
+	case A_DIAMOND: {
+		todo;
+	} break;
+	case A_KW: {
+		todo;
+	} break;
 	case A_BLOCK: {
 		size_t len = vlen(a.block.items);
 		bug_if(len == 0);
@@ -941,18 +985,6 @@ void compile_ast(output *o, typetable *table, flags fl, ast a, int indent)
 		if (indent)
 			odef(o, ";\n");
 	} break;
-
-	case A_ID: {
-		if (a.id.tag == I_KW)
-			bug("keyword");
-		if (a.id.tag == I_OP)
-			bug("op");
-		if (a.id.tag == I_WORD)
-			bug("word");
-		if (a.id.tag == I_INT)
-			odef(o, "%s", a.id.name);
-	} break;
-
 	case A_OPER: {
 		todo;
 	} break;
@@ -962,6 +994,18 @@ void compile_ast(output *o, typetable *table, flags fl, ast a, int indent)
 ast returning(size_t tindex, ast a)
 {
 	switch (a.tag) {
+	case A_INT: {
+		todo;
+	} break;
+	case A_FLOAT: {
+		todo;
+	} break;
+	case A_DIAMOND: {
+		todo;
+	} break;
+	case A_KW: {
+		todo;
+	} break;
 	case A_BLOCK: {
 		size_t len = vlen(a.block.items);
 		if (!len)
@@ -979,11 +1023,6 @@ ast returning(size_t tindex, ast a)
 	case A_CALL: {
 		todo;
 	} break;
-
-	case A_ID: {
-		todo;
-	} break;
-
 	case A_OPER: {
 		todo;
 	} break;

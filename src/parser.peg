@@ -4,6 +4,7 @@
 %source {
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 }
 
 %header {
@@ -32,18 +33,23 @@ atom <- l:list    { $$ = l; }
       / k:keyword { $$ = k; }
       / o:oper    { $$ = o; }
       / i:integer { $$ = i; }
-      / w:word    { $$ = w; }
+      / r:ref     { $$ = r; }
+      / d:diamond { $$ = d; }
 
-integer <- [0-9]+ { $$ = aint(strdup($0)); }
+integer <- [0-9]+ { $$ = aint(strtol($0, 0, 10)); }
 
-keyword <- ':' w:word { w.id.tag = I_KW; $$ = w; }
+keyword <- ':' word { $$ = akw(strdup($0 + 1)); }
 
-word <- [_a-zA-Z] [_a-zA-Z0-9-]* { $$ = aword(strdup($0)); }
+ref <- word { $$ = aref(strdup($0)); }
 
-oper <- !'.' opchar    { $$ = aop(strdup($0)); }
-      / opchar opchar+ { $$ = aop(strdup($0)); }
+word <- [_a-zA-Z] [_a-zA-Z0-9-]*
+
+oper <- !'.' opchar    { $$ = aoper(strdup($0), 0, 0); }
+      / opchar opchar+ { $$ = aoper(strdup($0), 0, 0); }
 
 opchar <- [!#$%&*+-./:;<=>?@\[\\\]^_`{|}~]
+
+diamond <- '<' [_a-zA-Z0-9-.]+ '>' { $$ = adiamond(strdup($0)); }
 
 _ <- [ \t\n]
 

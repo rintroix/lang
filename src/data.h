@@ -21,6 +21,7 @@
 #define dlen(D) umd_len(D)
 #define deach(...) umd_each(__VA_ARGS__)
 #define dloop(...) umd_loop(__VA_ARGS__)
+#define dprint(...) umd_append_fmt(__VA_ARGS__)
 
 enum e_type {
 	T_UNKNOWN = 1,
@@ -84,9 +85,17 @@ typedef struct typetable {
 	    .table = (TABLE),                                                  \
 	})
 
-enum e_ast { A_LIST = 1, A_CALL, A_ID, A_OPER, A_BLOCK, A_REF };
-
-enum e_id { I_WORD, I_KW, I_OP, I_INT };
+enum e_ast {
+	A_LIST = 1,
+	A_INT,
+	A_FLOAT,
+	A_CALL,
+	A_KW,
+	A_OPER,
+	A_BLOCK,
+	A_REF,
+	A_DIAMOND,
+};
 
 struct ast {
 	enum e_ast tag;
@@ -97,8 +106,21 @@ struct ast {
 		} list;
 
 		struct {
+			char *name;
 			define *def;
 		} ref;
+
+		struct {
+			char *name;
+		} kw;
+
+		struct {
+			int value;
+		} integer;
+
+		struct {
+			float value;
+		} floating;
 
 		struct {
 			char *name;
@@ -108,8 +130,7 @@ struct ast {
 
 		struct {
 			char *name;
-			enum e_id tag;
-		} id;
+		} diamond;
 
 		struct {
 			char *name;
@@ -147,13 +168,13 @@ typedef struct function {
 #define def(NAME, INDEX, INIT)                                                 \
 	((define){.name = NAME, .index = (INDEX), .init = (INIT)})
 
-#define aop(NAME) ((ast){.tag = A_ID, .id = {.name = (NAME), .tag = I_OP}})
+#define adiamond(NAME) ((ast){.tag = A_DIAMOND, .diamond = {.name = (NAME)}})
 
-#define akw(NAME) ((ast){.tag = A_ID, .id = {.name = (NAME), .tag = I_KW}})
+#define akw(NAME) ((ast){.tag = A_KW, .kw = {.name = (NAME)}})
 
-#define aword(NAME) ((ast){.tag = A_ID, .id = {.name = (NAME), .tag = I_WORD}})
+#define aref(NAME) ((ast){.tag = A_REF, .ref = {.name = (NAME)}})
 
-#define aint(NAME) ((ast){.tag = A_ID, .id = {.name = (NAME), .tag = I_INT}})
+#define aint(V) ((ast){.tag = A_INT, .integer = {.value = (V)}})
 
 #define ablock(FUNS, DEFS, ITEMS) ((ast){.tag = A_BLOCK, .block = {.functions = (FUNS), .defines = (DEFS), .items = (ITEMS)}})
 
@@ -166,10 +187,10 @@ typedef struct function {
 	((ast){.tag = A_OPER,                                                  \
 	       .oper = {.name = (NAME), .left = (L), .right = (R)}})
 
-#define W(x) &aword(x)
+#define R(x) &aref(x)
 #define L(x) &alist(x)
 #define K(x) &akw(x)
-#define O(x) &aop(x)
+#define O(x) &aoper(x, 0, 0)
 
 typedef struct macro {
 	char *name;

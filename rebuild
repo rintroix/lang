@@ -222,7 +222,7 @@ RRR() {
 : ${LDFLAGS:=}
 : ${BUILD:=build}
 
-Q command -v clean || clean() { rm -rf $BUILD/; echo '- $BUILD/'; } 
+Q command -v clean || clean() { rm -rf $BUILD/; echo "- $BUILD/"; } 
 
 [ $# -gt 0 ] || set -- build
 
