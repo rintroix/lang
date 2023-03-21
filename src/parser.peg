@@ -35,6 +35,7 @@ atom <- l:list    { $$ = l; }
       / o:oper    { $$ = o; }
       / i:integer { $$ = i; }
       / r:ref     { $$ = r; }
+      / s:string  { $$ = s; }
 
 integer <- [0-9]+ { $$ = aint(strtol($0, 0, 10)); }
 
@@ -49,7 +50,12 @@ oper <- !'.' opchar    { $$ = aoper(strdup($0), 0, 0); }
 
 opchar <- [!#$%&*+-./:;<=>?@\[\\\]^_`{|}~]
 
-diamond <- '<' [_a-zA-Z0-9-.]+ '>' { $$ = adiamond(strdup($0)); }
+diamond <- '<' <filename> '>' { $$ = adiamond(strdup($1)); }
+
+# TODO escaping
+string <- '"' <filename> '"' { $$ = astr(strdup($1)); }
+
+filename <- [_a-zA-Z0-9./-]+
 
 _ <- [ \t\n]
 

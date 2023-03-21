@@ -88,6 +88,7 @@ typedef struct typetable {
 enum e_ast {
 	A_LIST = 1,
 	A_INT,
+	A_STR,
 	A_FLOAT,
 	A_CALL,
 	A_KW,
@@ -123,6 +124,10 @@ struct ast {
 		} floating;
 
 		struct {
+			char *value;
+		} str;
+
+		struct {
 			char *name;
 			size_t req;
 			vec(ast) args;
@@ -155,7 +160,7 @@ struct define {
 };
 
 enum e_funflags {
-	FUN_EXTERN = 1 << 1,	 
+	FUN_EXTERN = 1 << 1,
 };
 
 typedef struct function {
@@ -168,36 +173,45 @@ typedef struct function {
 #define def(NAME, INDEX, INIT)                                                 \
 	((define){.name = NAME, .index = (INDEX), .init = (INIT)})
 
-#define adiamond(NAME) ((ast){.tag = A_DIAMOND, .diamond = {.name = (NAME)}})
+#define adiamond(N) ((ast){.tag = A_DIAMOND, .diamond = {.name = (N)}})
 
-#define akw(NAME) ((ast){.tag = A_KW, .kw = {.name = (NAME)}})
+#define akw(N) ((ast){.tag = A_KW, .kw = {.name = (N)}})
 
-#define aref(NAME) ((ast){.tag = A_REF, .ref = {.name = (NAME)}})
+#define aref(N) ((ast){.tag = A_REF, .ref = {.name = (N)}})
+
+#define astr(V) ((ast){.tag = A_STR, .str = {.value = (V)}})
 
 #define aint(V) ((ast){.tag = A_INT, .integer = {.value = (V)}})
 
-#define ablock(FUNS, DEFS, ITEMS) ((ast){.tag = A_BLOCK, .block = {.functions = (FUNS), .defines = (DEFS), .items = (ITEMS)}})
+#define ablock(FUNS, DEFS, ITEMS)                                              \
+	((ast){.tag = A_BLOCK,                                                 \
+	       .block = {                                                      \
+		   .functions = (FUNS), .defines = (DEFS), .items = (ITEMS)}})
 
 #define alist(ITEMS) ((ast){.tag = A_LIST, .list = {.items = (ITEMS)}})
 
-#define acall(NAME, ARGS)                                                      \
-	((ast){.tag = A_CALL, .call = {.name = (NAME), .args = (ARGS)}})
+#define acall(N, ARGS)                                                         \
+	((ast){.tag = A_CALL, .call = {.name = (N), .args = (ARGS)}})
 
-#define aoper(NAME, L, R)                                                      \
-	((ast){.tag = A_OPER,                                                  \
-	       .oper = {.name = (NAME), .left = (L), .right = (R)}})
+#define aoper(N, L, R)                                                         \
+	((ast){.tag = A_OPER, .oper = {.name = (N), .left = (L), .right = (R)}})
 
 #define R(x) &aref(x)
 #define L(x) &alist(x)
 #define K(x) &akw(x)
-#define O(x) &aoper(x, 0, 0)
+#define O(x) &aoper(x, NULL, NULL)
+#define R0 R(NULL)
+#define L0 L(NULL)
+#define K0 K(NULL)
+#define O0 O(NULL)
 
 typedef struct macro {
 	char *name;
 } macro;
 
 typedef struct impl {
-	function* fp;
+	char *name;
+	function *fp;
 	typetable table;
 } impl;
 
@@ -208,16 +222,16 @@ typedef struct output {
 } output;
 
 typedef struct context {
-	output* out;
+	output *out;
 	vec(define) defines;
 	vec(macro) macros;
 	vec(function) functions;
 	vec(type) types;
-	vec(char*) includes;
+	vec(char *) includes;
 	struct context *next;
 } context;
 
-static inline ast alist0()
+static inline ast alist0(void)
 {
 	vec(ast) items = avec(ast);
 	return alist(items);

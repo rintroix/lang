@@ -6,6 +6,7 @@ alias d=debug
 
 run() {
 	build && DO app ex.r | tee "$BUILD/ex.c"
+	[ -s $BUILD/ex.c ] || _err 9 "empty ex.c" # TODO api
 	cat > "$BUILD/bar.c" << EOF
 		int bar(int x, int y) {
 			return x * y + 10;
@@ -14,14 +15,15 @@ EOF
 	cat > "$BUILD/bar.h" << EOF
 		int bar(int x, int y);
 EOF
-#	RE $BUILD/ex.c
-#	RE $BUILD/bar.c
-#	LD ex $BUILD/bar.o $BUILD/ex.o 
-#	if DO ex; then
-#		echo >&2 RC 0
-#	else
-#		echo >&2 RC $?
-#	fi
+	RE $BUILD/ex.c
+	RE $BUILD/bar.c
+	LD ex $BUILD/bar.o $BUILD/ex.o 
+	if DO ex; then
+		echo >&2 RC 0
+	else
+		echo >&2 RC $?
+	fi
+
 }
 
 tools() {
@@ -59,5 +61,7 @@ build() {
 	DO test >/dev/null || DO test
 
 	LD app build/parser.o build/main.o 
+
+	external/sparse/sparse $CFLAGS src/main.c
 }
 
