@@ -19,7 +19,7 @@ static inline type tint(size_t bits)
 ast buggyast = (ast){.tag = A_KW, .kw = {.name = "!BUG!"}};
 
 ast parse(context *ctx, typetable *table, ast a);
-void compile(context *ctx, output *o, typetable *table, callreq req);
+void compile(context *ctx, typetable *table, callreq req);
 
 #define lift(...)                                                              \
 	_Generic((__VA_ARGS__), ast : alift, type : tlift)(__VA_ARGS__)
@@ -32,6 +32,10 @@ typedef enum e_flags {
 } flags;
 
 static inline enum e_flags noret(enum e_flags f) { return f & ~F_RETURN; }
+
+context chain_context(context *ctx) {
+	return (context) { .out = ctx->out, .next = ctx };
+}
 
 char *show_type(type t)
 {
@@ -266,6 +270,17 @@ type *tlift(type t)
 	return ptr;
 }
 
+int name_helper(char *pat, char *name)
+{
+	if (!pat)
+		return 1;
+
+	if (0 == strcmp(pat, name))
+		return 1;
+
+	return 0;
+}
+
 int is(ast a, ast *pat)
 {
 	if (!pat)
@@ -282,7 +297,7 @@ int is(ast a, ast *pat)
 		todo;
 	} break;
 	case A_DIAMOND: {
-		todo;
+		return name_helper(pat->diamond.name, a.diamond.name);
 	} break;
 	case A_KW: {
 		todo;
@@ -291,29 +306,23 @@ int is(ast a, ast *pat)
 		todo;
 	} break;
 	case A_REF: {
-		if (!pat->ref.name)
-			return 1;
-
-		if (0 == strcmp(pat->ref.name, a.ref.name))
-			return 1;
-
-		return 0;
+		return name_helper(pat->ref.name, a.ref.name);
 	} break;
 	case A_BLOCK: {
 		todo;
 	} break;
-	// case A_ID: {
-	// 	if (pat->id.tag != a.id.tag)
-	// 		return 0;
+		// case A_ID: {
+		// 	if (pat->id.tag != a.id.tag)
+		// 		return 0;
 
-	// 	if (!pat->id.name)
-	// 		return 1;
+		// 	if (!pat->id.name)
+		// 		return 1;
 
-	// 	if (0 == strcmp(pat->id.name, a.id.name))
-	// 		return 1;
+		// 	if (0 == strcmp(pat->id.name, a.id.name))
+		// 		return 1;
 
-	// 	return 0;
-	// } break;
+		// 	return 0;
+		// } break;
 
 	case A_LIST: {
 		if (!pat->list.items)
@@ -366,7 +375,7 @@ void cadd(vec(char) out, char *s)
 
 void _show_ast(deq(char) s, ast a)
 {
-	
+
 	switch (a.tag) {
 	case A_FLOAT: {
 		todo;
@@ -420,7 +429,8 @@ void _show_ast(deq(char) s, ast a)
 	}
 }
 
-char * show_ast(ast a) {
+char *show_ast(ast a)
+{
 	deq(char) s = adeq(char);
 	_show_ast(s, a);
 	return umd_to_cstr(s);
@@ -457,7 +467,8 @@ vec(define) funargs(context *ctx, typetable *table, vec(ast) list)
 		switch (it.tag) {
 		case A_REF: {
 			size_t index = add_unknown(table);
-			push(out, (define){.name = it.ref.name, .index = index});
+			push(out,
+			     (define){.name = it.ref.name, .index = index});
 		} break;
 
 		case A_LIST: {
@@ -629,7 +640,10 @@ int make_fn(context *ctx, char *name, type *fret, vec(ast) args, vec(ast) body)
 	// TODO funargs require context as well, inits might need it
 	vec(define) defs = funargs(ctx, &table, args);
 	table.arity = vlen(args);
-	context local = (context){.defines = defs, .next = ctx};
+
+	context local = chain_context(ctx);
+	local.defines = defs;
+
 	ast init = parse_block(&local, &table, body, 0, vlen(body)); // TODO
 	back_propagate(&table, &init, 0);
 	type iret = get_type(&table, init.index);
@@ -668,6 +682,19 @@ int make_extern(context *ctx, char *name, type ret, vec(ast) args)
 	bug("no externs");
 }
 
+int add_include(context *ctx, char *name)
+{
+	for (; ctx; ctx = ctx->next) {
+		if (!ctx->includes)
+			continue;
+
+		push(ctx->includes, name);
+		return 1;
+	}
+
+	bug("no includes");
+}
+
 int parse_top_one(context *ctx, vec(ast) items)
 {
 	if (match(items, R("fn"), R(0), R(0), L(0))) {
@@ -702,13 +729,9 @@ int parse_top_one(context *ctx, vec(ast) items)
 		return make_extern(ctx, name, t, args);
 	}
 
-	if (match(items, R("include"), R("fn"), R(0), R(0), L(0))) {
-		char *name = vat(items, 2)->ref.name;
-		// TODO extraction hack
-		type t = list2type(ctx, items, 3, 4);
-		t.solid = 1;
-		vec(ast) args = vat(items, 4)->list.items;
-		return make_extern(ctx, name, t, args);
+	if (match(items, R("include"), &adiamond(0))) {
+		char *name = vat(items, 1)->diamond.name;
+		return add_include(ctx, name);
 	}
 
 	return 0;
@@ -790,8 +813,9 @@ context parse_top(context *upper, vec(ast) items)
 	vec(function) functions = avec(function);
 	vec(define) defines = avec(define);
 
-	context current = (context){
-	    .functions = functions, .defines = defines, .next = upper};
+	context current = chain_context(upper);
+	current.functions = functions;
+	current.defines = defines;
 
 	veach(items, it)
 	{
@@ -1029,15 +1053,17 @@ ast returning(size_t tindex, ast a)
 	}
 }
 
-void compile_fn(context *ctx, output *o, typetable *table, function *fun)
+void compile_fn(context *ctx, typetable *table, function *fun)
 {
+	output *o = ctx->out;
+
 	veach(table->calls, req, i)
 	{
 		typetable t = new_table();
 		add_type(&t, get_type(table, req.ret));
 		t.arity = vlen(req.args);
 		veach(req.args, argi) { add_type(&t, get_type(table, argi)); }
-		compile(ctx, o, &t, req);
+		compile(ctx, &t, req);
 	}
 
 	if (fun->flags & FUN_EXTERN)
@@ -1068,8 +1094,9 @@ void compile_fn(context *ctx, output *o, typetable *table, function *fun)
 	odef(o, "}\n");
 }
 
-void compile(context *ctx, output *o, typetable *table, callreq req)
+void compile(context *ctx, typetable *table, callreq req)
 {
+	output *o = ctx->out;
 	vec(function *) candidates = find_candidates(ctx, table, req.name);
 
 	if (vlen(candidates) > 1)
@@ -1088,7 +1115,7 @@ void compile(context *ctx, output *o, typetable *table, callreq req)
 	}
 
 	if (oreg(o, f, unitable)) {
-		compile_fn(ctx, o, &unitable, f);
+		compile_fn(ctx, &unitable, f);
 	}
 }
 
@@ -1110,28 +1137,31 @@ int main(int argc, char **argv)
 
 	bug_if(a.tag != 0);
 
-	context upper =
-	    (context){.defines = avec(define), .macros = avec(macro)};
+	context upper = (context){.defines = avec(define),
+				  .macros = avec(macro),
+				  .includes = avec(char *)};
+
+	output out = (output){
+	    .definitions = adeq(char),
+	    .declarations = adeq(char),
+	    .implementations = avec(impl),
+	};
+
 
 	context topctx = parse_top(&upper, tops);
+	topctx.out = &out;
 	typetable maintable = new_table();
 	size_t mainret = add_type(&maintable, tint(0));
 	vec(size_t) mainargs = avec(size_t);
 	callreq mainreq =
 	    (callreq){.name = "main", .ret = mainret, .args = mainargs};
 
-	output o = (output){
-	    .definitions = adeq(char),
-	    .declarations = adeq(char),
-	    .implementations = avec(impl),
-	};
+	odec(&out, "#include<stdint.h>\n");
 
-	odec(&o, "#include<stdint.h>\n");
+	compile(&topctx, &maintable, mainreq);
 
-	compile(&topctx, &o, &maintable, mainreq);
-
-	printf("%s", umd_to_cstr(o.declarations));
-	printf("%s", umd_to_cstr(o.definitions));
+	printf("%s", umd_to_cstr(out.declarations));
+	printf("%s", umd_to_cstr(out.definitions));
 
 	log("END");
 }

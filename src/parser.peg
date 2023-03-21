@@ -30,11 +30,11 @@ many <- m:many _+ a:atom { $$ = append(m, a); }
       / b:atom _+ c:atom { $$ = append(alist1(b), c); }
 
 atom <- l:list    { $$ = l; }
+      / d:diamond { $$ = d; }
       / k:keyword { $$ = k; }
       / o:oper    { $$ = o; }
       / i:integer { $$ = i; }
       / r:ref     { $$ = r; }
-      / d:diamond { $$ = d; }
 
 integer <- [0-9]+ { $$ = aint(strtol($0, 0, 10)); }
 

@@ -196,14 +196,6 @@ typedef struct macro {
 	char *name;
 } macro;
 
-typedef struct context {
-	vec(define) defines;
-	vec(macro) macros;
-	vec(function) functions;
-	vec(type) types;
-	struct context *next;
-} context;
-
 typedef struct impl {
 	function* fp;
 	typetable table;
@@ -214,6 +206,16 @@ typedef struct output {
 	deq(char) definitions;
 	vec(impl) implementations;
 } output;
+
+typedef struct context {
+	output* out;
+	vec(define) defines;
+	vec(macro) macros;
+	vec(function) functions;
+	vec(type) types;
+	vec(char*) includes;
+	struct context *next;
+} context;
 
 static inline ast alist0()
 {

@@ -1,3 +1,5 @@
+(include <stdio.h>)
+
 (extern fn bar int ((x int) (y int)))
 
 (fn foo (x (y int)) x)
