@@ -23,6 +23,77 @@
 #define dloop(...) umd_loop(__VA_ARGS__)
 #define dprint(...) umd_append_fmt(__VA_ARGS__)
 
+typedef struct typeindex {
+	size_t value;
+} typeindex;
+
+enum e_ir {
+	I_SKIP = 1,	
+	I_RET,
+	I_OPEN,
+	I_CLOSE,
+	I_DEF,
+	I_REF,
+	I_USE,
+	I_SET,
+	I_CALL,
+	I_OPER,
+	I_LINT,
+	I_LFLT,
+	I_LSTR,
+};
+
+typedef struct ir {
+	enum e_ir tag;	
+	union {
+		struct {
+			size_t count;
+		} skip;
+
+		struct {
+			size_t index; // def
+		} set;
+
+		struct {
+			size_t count; // items inside
+		} open;
+
+		struct {
+			size_t index; // of open
+		} close;
+
+		struct {
+			size_t index; // in callreqs
+			size_t count; // args
+		} call;
+
+		struct {
+			size_t index; // in opreqs
+			size_t count; // operands in a tree
+		} oper;
+
+		struct {
+			typeindex index;
+			size_t count;
+			char *name;
+		} def;
+
+		struct {
+			size_t index; // of def
+		} ref;
+
+		struct {
+			size_t index; // in requests
+			char *name;
+		} use;
+
+		struct {
+			typeindex index; // type
+			int value;
+		} lint;
+	};
+} ir;
+
 enum e_type {
 	T_UNKNOWN = 1,
 	T_INTEGER,
@@ -56,25 +127,38 @@ typedef struct type {
 	};
 } type;
 
+typedef struct opreq {
+	int isop; // TODO bool
+	union {
+		struct {
+			char *name;
+			struct opreq* left;
+			struct opreq* right;
+		} op;
+
+		struct {
+			size_t index; // in ir
+		} val;
+	};
+} opreq;
+
 typedef struct define define;
 
 typedef struct callreq {
 	char *name;
 	size_t ret;
 	vec(size_t) args;
-} callreq;
 
-typedef struct opreq {
-	char *name;
-	size_t ret;
-	size_t left;
-	size_t right;
-} opreq;
+	size_t arity;
+	size_t argsidx;
+	size_t defidx;
+} callreq;
 
 typedef struct typetable {
 	vec(type) types;
 	vec(callreq) calls;
 	vec(opreq) ops;
+	vec(size_t) uses;
 	size_t arity;
 } typetable;
 
@@ -170,8 +254,23 @@ typedef struct function {
 	enum e_funflags flags;
 } function;
 
+typedef struct ir_function {
+	char *name;
+	typetable table;
+	vec(ir) body;
+	enum e_funflags flags;
+} ir_function;
+
 #define def(NAME, INDEX, INIT)                                                 \
 	((define){.name = NAME, .index = (INDEX), .init = (INIT)})
+
+#define iset(I) ((ir){.tag = I_SET, .set = {.index = I}})
+#define iref(I) ((ir){.tag = I_REF, .ref = {.index = I}})
+#define iuse(N, I) ((ir){.tag = I_USE, .use = {.index = I, .name = N}})
+#define idef(N, I) ((ir){.tag = I_DEF, .def = {.index = I, .name = N}})
+#define ioper(I, N) ((ir){.tag = I_OPER, .oper = {.index = I, .count = N}})
+#define iskip(N) ((ir){.tag = I_SKIP, .skip = {.count = N}})
+#define ilint(I, V) ((ir){.tag = I_LINT, .lint = {.index = I, .value = V}})
 
 #define adiamond(N) ((ast){.tag = A_DIAMOND, .diamond = {.name = (N)}})
 
@@ -226,6 +325,7 @@ typedef struct context {
 	vec(define) defines;
 	vec(macro) macros;
 	vec(function) functions;
+	vec(ir_function) irfns;
 	vec(type) types;
 	vec(char *) includes;
 	struct context *next;

@@ -102,7 +102,6 @@ LOCK() {
 _lock() {
 	local f fd=3 IFS=:
 	for f in $LASTLOCK; do
-		rm -v "$f"
 		mkdir -p "$T/$f"
 		eval "exec $fd< '$T/$f'"
 		flock -n $fd || _err 8 "lock failed: $f" 

@@ -1,4 +1,3 @@
-(include <stdio.h>)
 (include "bar.h")
 
 (extern fn bar int ((x int) (y int)))
@@ -12,6 +11,9 @@
 (fn i1 i32 () 1)
 (fn i2 int () 1)
 
+(fn id (x) x)
+
 (fn main int ()
+  (id . id . i1)
   (add (i1) 2)
   )

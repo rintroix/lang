@@ -13,15 +13,32 @@
 // TODO propagate through assignment
 // TODO call fetches actual generated fn
 
+// decls
+static int is(ast a, ast *pat);
+static ir parse_ir(typetable *table, vec(ir) body, ast a);
+// static ast parse(context *ctx, typetable *table, ast a);
+static void compile(context *ctx, typetable *table, callreq req);
+static callreq *get_callreqp(typetable *table, size_t index);
+
 static inline type tint(size_t bits)
 {
 	return (type){.tag = T_INTEGER, .integer = {.bits = bits}};
 }
 
-static ast buggyast = (ast){.tag = A_KW, .kw = {.name = "!BUG!"}};
+static int add_include(context *ctx, char *name)
+{
+	for (; ctx; ctx = ctx->next) {
+		if (!ctx->includes)
+			continue;
 
-ast parse(context *ctx, typetable *table, ast a);
-void compile(context *ctx, typetable *table, callreq req);
+		push(ctx->includes, name);
+		return 1;
+	}
+
+	bug("no includes");
+}
+
+static ast buggyast = (ast){.tag = A_KW, .kw = {.name = "!BUG!"}};
 
 #define lift(...)                                                              \
 	_Generic((__VA_ARGS__), ast : alift, type : tlift)(__VA_ARGS__)
@@ -34,6 +51,180 @@ typedef enum e_flags {
 } flags;
 
 static inline enum e_flags noret(enum e_flags f) { return f & ~F_RETURN; }
+
+static int _match(vec(ast) list, ast **patterns, size_t n)
+{
+	veach(list, it, index)
+	{
+		if (index == n)
+			return 1;
+
+		if (!is(it, patterns[index]))
+			return 0;
+	}
+
+	return vlen(list) == n;
+}
+
+#define LEN(A) (sizeof(A) / sizeof((A)[0]))
+#define MA(...) ((ast *[]){__VA_ARGS__})
+#define match(L, ...) _match(L, MA(__VA_ARGS__), LEN(MA(__VA_ARGS__)))
+
+static void _show_ast(deq(char) s, ast a)
+{
+	switch (a.tag) {
+	case A_STR: {
+		dprint(s, "\"%s\"", a.str.value);
+	} break;
+	case A_FLOAT: {
+		todo;
+	} break;
+	case A_INT: {
+		todo;
+	} break;
+	case A_DIAMOND: {
+		todo;
+	} break;
+	case A_KW: {
+		todo;
+	} break;
+	case A_BLOCK: {
+		todo;
+	} break;
+	case A_REF: {
+		char *name = a.ref.def ? a.ref.def->name : a.ref.name;
+		dprint(s, "%s", name);
+	} break;
+	case A_LIST: {
+		dprint(s, "(");
+		veach(a.list.items, it, i)
+		{
+			if (i != 0)
+				dprint(s, " ");
+			_show_ast(s, it);
+		}
+		dprint(s, ")");
+	} break;
+
+	case A_CALL: {
+		dprint(s, "%s", a.call.name);
+		dprint(s, "(");
+		veach(a.call.args, arg, i)
+		{
+			if (i != 0)
+				dprint(s, " ");
+			_show_ast(s, arg);
+		}
+		dprint(s, ")");
+	} break;
+
+	case A_OPER: {
+		dprint(s, "(");
+		_show_ast(s, *a.oper.left);
+		dprint(s, " %s ", a.oper.name);
+		_show_ast(s, *a.oper.right);
+		dprint(s, ")");
+	} break;
+	}
+}
+
+static char *_show_ir(typetable *t, ir e)
+{
+	char *out;
+	switch (e.tag) {
+	case I_DEF: {
+		asprintf(&out, "DEF   %2zu %s", e.def.index.value,
+			 e.def.name ? e.def.name : ".");
+	} break;
+	case I_REF: {
+		asprintf(&out, "REF   %2zu", e.ref.index);
+	} break;
+	case I_USE: {
+		asprintf(&out, "USE   %2zu %s", e.use.index, e.use.name);
+	} break;
+	case I_CALL: {
+		asprintf(&out, "CALL  %2zu %s", e.call.count,
+			 t ? get_callreqp(t, e.call.index)->name : "");
+	} break;
+	case I_OPER: {
+		todo;
+	} break;
+	case I_LINT: {
+		asprintf(&out, "LINT  %2zu %d", e.lint.index.value, e.lint.value);
+	} break;
+	case I_LSTR: {
+		todo;
+	} break;
+	case I_LFLT: {
+		todo;
+	} break;
+	case I_SKIP: {
+		asprintf(&out, "SKIP  %2zu", e.skip.count);
+	} break;
+	case I_OPEN: {
+		asprintf(&out, "OPEN");
+	} break;
+	case I_CLOSE: {
+		asprintf(&out, "CLOSE");
+	} break;
+	case I_SET: {
+		asprintf(&out, "SET   %2zu", e.set.index);
+	} break;
+	case I_RET: {
+		asprintf(&out, "RET");
+	} break;
+	}
+	return out;
+}
+
+static char *show_ir(ir e) {
+	return _show_ir(NULL, e);
+}
+
+static void dump_ir_full(typetable *table, vec(ir) items)
+{
+	veach(items, item, i) { log("\t%03d %s", i, _show_ir(table, item)); }
+}
+
+static void dump_ir(vec(ir) items)
+{
+	dump_ir_full(NULL, items);
+}
+
+static type make_simple_type(char *name)
+{
+	if (0 == strcmp("int", name))
+		return tint(0);
+
+	if (0 == strcmp("i32", name))
+		return tint(32);
+
+	if (0 == strcmp("float", name))
+		return (type){.tag = T_FLOATING, .integer = {.bits = 0}};
+
+	error("type not found: %s", name);
+}
+
+static type list2type(vec(ast) items, size_t start, size_t end)
+{
+	check(end > start);
+
+	if (end - start == 1) {
+		ast *head = vat(items, start);
+		check(head->tag == A_REF);
+		char *name = head->ref.name;
+		return make_simple_type(name);
+	}
+
+	todo; // compound and funs
+}
+
+static char *show_ast(ast a)
+{
+	deq(char) s = adeq(char);
+	_show_ast(s, a);
+	return umd_to_cstr(s);
+}
 
 static context chain_context(context *ctx)
 {
@@ -167,9 +358,9 @@ static inline type *unify_types(type *a, type *b)
 	return r;
 }
 
-static size_t add_type(typetable *table, type t)
+static typeindex add_type(typetable *table, type t)
 {
-	return push(table->types, t);
+	return (typeindex){push(table->types, t)};
 }
 
 static void change_type(typetable *table, size_t index, type t)
@@ -177,11 +368,41 @@ static void change_type(typetable *table, size_t index, type t)
 	*vat(table->types, index) = t;
 }
 
-static size_t add_unknown(typetable *table)
+static typeindex add_unknown(typetable *table)
 {
-	return push(
-	    table->types,
-	    (type){.tag = T_UNKNOWN, .unknown = {.index = vlen(table->types)}});
+	type t = (type){.tag = T_UNKNOWN, .unknown = {.index = vlen(table->types)}};
+	return add_type(table, t);
+}
+
+static size_t add_gen(typetable *table, vec(ir) body, type t)
+{
+	typeindex tindex = add_type(table, t);
+	return push(body, idef(NULL, tindex));
+}
+
+static size_t add_gen_unknown(typetable *table, vec(ir) body)
+{
+	typeindex tindex = add_unknown(table);
+	return push(body, idef(NULL, tindex));
+}
+
+static size_t add_def(typetable *table, vec(ir) body, char *name, type t)
+{
+	typeindex tindex = add_type(table, t);
+	return push(body, idef(name, tindex));
+}
+
+static size_t add_def_unknown(typetable *table, vec(ir) body, char *name)
+{
+	typeindex tindex = add_unknown(table);
+	return push(body, idef(name, tindex));
+}
+
+static ir add_return(typetable *table, vec(ir) body, ir e)
+{
+	push(body, (ir){.tag=I_RET});
+	push(body, e);
+	return iskip(0);
 }
 
 static size_t add_opreq(typetable *table, opreq o)
@@ -194,6 +415,11 @@ static size_t add_callreq(typetable *table, callreq c)
 	return push(table->calls, c);
 }
 
+static size_t add_use(typetable *table, size_t index)
+{
+	return push(table->uses, index);
+}
+
 static callreq *get_callreqp(typetable *table, size_t index)
 {
 	return vat(table->calls, index);
@@ -204,13 +430,14 @@ static type get_type(typetable *table, size_t index)
 	return vget(table->types, index);
 }
 
-static typetable new_table(void)
+static typetable new_table(size_t arity)
 {
 	return (typetable){
 	    .types = avec(type),
 	    .calls = avec(callreq),
 	    .ops = avec(opreq),
-	    .arity = 0,
+	    .uses = avec(size_t),
+	    .arity = arity,
 	};
 }
 
@@ -220,6 +447,7 @@ static typetable clone_table(typetable table)
 	    .types = vslice(table.types, 0, vlen(table.types)),
 	    .calls = vslice(table.calls, 0, vlen(table.calls)),
 	    .ops = vslice(table.ops, 0, vlen(table.ops)),
+	    .uses = vslice(table.uses, 0, vlen(table.ops)), // TODO RO
 	    .arity = table.arity,
 	};
 }
@@ -238,28 +466,6 @@ static int same_table(typetable a, typetable b)
 	return 1;
 }
 
-static type find_simple_type(context *ctx, char *name)
-{
-	for (; ctx; ctx = ctx->next) {
-		if (!ctx->types)
-			continue;
-
-		veach(ctx->types, t) {}
-	}
-	// TODO actually find
-
-	if (0 == strcmp("int", name))
-		return tint(0);
-
-	if (0 == strcmp("i32", name))
-		return tint(32);
-
-	if (0 == strcmp("float", name))
-		return (type){.tag = T_FLOATING, .integer = {.bits = 0}};
-
-	error("type not found: %s", name);
-}
-
 static ast *alift(ast a)
 {
 	ast *ptr = malloc(sizeof(ast));
@@ -272,6 +478,48 @@ static type *tlift(type t)
 	type *ptr = malloc(sizeof(type));
 	*ptr = t;
 	return ptr;
+}
+
+static void embed(typetable *table, vec(ir) body, ir e)
+{
+	switch (e.tag) {
+	case I_USE: {
+		bug_if_not(e.use.index == 0);
+		e.use.index = add_use(table, vlen(body));
+		push(body, e);
+	} break;
+	case I_REF: {
+		ir *defp = vat(body, e.ref.index);
+		bug_if_not(defp->tag == I_DEF);
+		defp->def.count++;
+		push(body, e);
+	} break;
+	case I_LINT: {
+		push(body, e);
+	} break;
+	default:
+		bug("bad ir: %s", show_ir(e));
+	}
+}
+
+static void discard(typetable *table, vec(ir) body, ir e)
+{
+	switch (e.tag) {
+	case I_USE: {
+		todo;
+	} break;
+	case I_REF: {
+		ir *defp = vat(body, e.ref.index);
+		bug_if_not(defp->tag == I_DEF);
+		bug_if(defp->def.count);
+		*defp = iskip(0);
+	} break;
+	case I_LINT: {
+		todo;
+	} break;
+	default:
+		bug("bad ir: %s", show_ir(e));
+	}
 }
 
 static int name_helper(char *pat, char *name)
@@ -374,25 +622,138 @@ static int has(vec(ast) list, ast *pattern)
 	return 0;
 }
 
-static void cadd(vec(char) out, char *s)
+// #parse
+
+static size_t count_operands(opreq r)
 {
-	while (*s) {
-		push(out, *s);
-		s++;
-	}
+	if (!r.isop)
+		return 1;
+
+	return count_operands(*r.op.left) + count_operands(*r.op.right);
 }
 
-static void _show_ast(deq(char) s, ast a)
+static opreq parse_ir_operator(typetable *table, vec(ir) body, vec(ir) post,
+			       vec(ast) items, size_t start);
+
+static ir parse_ir_list(typetable *table, vec(ir) body, vec(ast) items)
+{
+	if (has(items, O0)) {
+		vec(ir) post = avec(ir);
+		opreq req = parse_ir_operator(table, body, post, items, 0);
+		size_t count = count_operands(req);
+		bug_if_not(vlen(post) == count_operands(req));
+		size_t reqindex = add_opreq(table, req);
+		todo;
+		size_t tindex = add_gen_unknown(table, body);
+		push(body, ioper(reqindex, count));
+		dbg("OPERATOR");
+		dump_ir(post);
+		todo; // copy over post items
+		      // make gen def
+		      // return gen def
+	}
+
+	ast *head = vat(items, 0);
+	bug_if_not(head->tag == A_REF);
+	char *name = head->ref.name;
+
+	vec(ir) post = avec(ir);
+	vloop(items, item, 1, vlen(items))
+	{
+		ir e = parse_ir(table, body, item);
+		log("CALL PUSH POST %s", show_ir(e));
+		push(post, e);
+	}
+
+	size_t call_def_index = add_gen_unknown(table, body);
+	log("ADD %s FOR %s", show_ir(vget(body, call_def_index)), name);
+	size_t call_index = vlen(body);
+
+	size_t reqidx =
+	    add_callreq(table, (callreq){.name = name,
+					 .defidx = call_def_index,
+					 .argsidx = call_index + 1});
+
+	push(body, (ir){.tag = I_CALL,
+			.call = {.index = reqidx, .count = vlen(post)}});
+	veach(post, item) { embed(table, body, item); }
+
+	return iref(call_def_index);
+}
+
+static ir parse_ir_many(typetable *table, vec(ir) body, vec(ast) items,
+			size_t start, size_t end)
+{
+	bug_if(end == start);
+
+	if (end - start == 1)
+		return parse_ir(table, body, vget(items, start));
+
+	return parse_ir_list(table, body, vslice(items, start, end));
+}
+
+static opreq parse_ir_operator(typetable *table, vec(ir) body, vec(ir) post,
+			       vec(ast) items, size_t start)
+{
+	// TODO opreq, same as callreq
+	// TODO better find
+
+	size_t end = vlen(items);
+	size_t pos = end;
+
+	if (start == end)
+		bug("empty");
+
+	vloop(items, it, start, end, index)
+	{
+		if (is(it, O0)) {
+			pos = index;
+			break;
+		}
+	}
+
+	if (pos == end) {
+		// start != end, so not empty
+		ir e = parse_ir_many(table, body, items, start, end);
+		todo; // embed ir expr
+		size_t index = push(post, e);
+		return (opreq){.isop = 0, .val = {.index = index}};
+	}
+
+	if (pos == start) {
+		bug("operator without left side");
+	}
+
+	todo;
+	// assert(pos > start);
+
+	// ast *op = vat(list, pos);
+	// assert(op->tag == A_OPER);
+	// char *name = op->oper.name;
+
+	// ast left = parse(ctx, table, atom_or_list(list, start, pos));
+	// ast right = parse_operator(ctx, table, list, pos + 1);
+	// ast out = aoper(name, lift(left), lift(right));
+	// out.index = add_unknown(table);
+	// out.oper.index = add_opreq(table, (opreq){.name = name,
+	// 					  .ret = out.index,
+	// 					  .left = left.index,
+	// 					  .right = right.index});
+	// return out;
+}
+
+static ir parse_ir(typetable *table, vec(ir) body, ast a)
 {
 	switch (a.tag) {
 	case A_STR: {
-		dprint(s, "\"%s\"", a.str.value);
+		todo;
 	} break;
 	case A_FLOAT: {
 		todo;
 	} break;
 	case A_INT: {
-		todo;
+		typeindex index = add_type(table, tint(0));
+		return ilint(index, a.integer.value);
 	} break;
 	case A_DIAMOND: {
 		todo;
@@ -400,51 +761,233 @@ static void _show_ast(deq(char) s, ast a)
 	case A_KW: {
 		todo;
 	} break;
-	case A_BLOCK: {
-		todo;
-	} break;
 	case A_REF: {
-		char *name = a.ref.def ? a.ref.def->name : a.ref.name;
-		dprint(s, "%s", name);
+		return iuse(a.ref.name, 0);
+	} break;
+	case A_BLOCK: {
+		bug("block");
+	} break;
+	case A_OPER: {
+		bug("oper");
+	} break;
+	case A_CALL: {
+		bug("call");
 	} break;
 	case A_LIST: {
-		dprint(s, "(");
-		veach(a.list.items, it, i)
-		{
-			if (i != 0)
-				dprint(s, " ");
-			_show_ast(s, it);
-		}
-		dprint(s, ")");
+		return parse_ir_list(table, body, a.list.items);
 	} break;
+	}
 
-	case A_CALL: {
-		dprint(s, "%s", a.call.name);
-		dprint(s, "(");
-		veach(a.call.args, arg, i)
-		{
-			if (i != 0)
-				dprint(s, " ");
-			_show_ast(s, arg);
-		}
-		dprint(s, ")");
-	} break;
+	bug("unreachable");
+}
 
-	case A_OPER: {
-		dprint(s, "(");
-		_show_ast(s, *a.oper.left);
-		dprint(s, " %s ", a.oper.name);
-		_show_ast(s, *a.oper.right);
-		dprint(s, ")");
-	} break;
+static ir parse_ir_block(typetable *table, vec(ir) body, vec(ast) items,
+			 int ret)
+{
+	// TODO compactor first
+	bug_if_not(vlen(items));
+
+	size_t openidx = push(body, (ir){.tag = I_OPEN});
+	size_t reservedidx = push(body, iskip(1));
+	push(body, iskip(0)); // DEF no assign
+
+	// size_t dindex = add_gen_unknown(table, body);
+	veach(items, a, i)
+	{
+		ir e = parse_ir(table, body, a);
+
+		if (i + 1 == vlen(items)) {
+
+			if (ret) {
+				return add_return(table, body, e);
+			} else {
+				size_t idx = push(
+				    body, (ir){.tag = I_CLOSE,
+					       .close = {.index = openidx}});
+				switch (e.tag) {
+				case I_USE: {
+					return e;
+				} break;
+				case I_REF: {
+					if (e.ref.index < openidx)
+						bug("outer def");
+					ir *defp = vat(body, e.ref.index);
+					ir *next = vat(body, e.ref.index + 1);
+					bug_if_not(defp->tag == I_DEF);
+					bug_if(defp->def.count);
+					if (next->tag == I_SKIP) {
+						todo;
+					} else {
+						ir *reserved =
+						    vat(body, reservedidx);
+						*reserved = *defp;
+						reserved->def.count++;
+						*defp = iset(reservedidx);
+						return iref(reservedidx);
+					}
+				} break;
+				case I_LINT: {
+					return e;
+				} break;
+				default:
+					bug("bad ir: %s", show_ir(e));
+				}
+			}
+		} else {
+			discard(table, body, e);
+		}
+	}
+
+	bug("unreachable");
+}
+
+static void ir_funargs(typetable *table, vec(ir) body, vec(ast) args)
+{
+	veach(args, arg)
+	{
+		switch (arg.tag) {
+		case A_REF: {
+			add_def_unknown(table, body, arg.ref.name);
+		} break;
+		case A_LIST: {
+			vec(ast) items = arg.list.items;
+			check(vlen(items) > 1);
+			ast head = vget(items, 0);
+			check(head.tag == A_REF);
+			char *name = head.ref.name;
+			type t = list2type(items, 1, vlen(items));
+			t.solid = 1;
+			add_def(table, body, name, t);
+		} break;
+		default:
+			error("unexpected arg: %s", show_ast(arg));
+		}
 	}
 }
 
-static char *show_ast(ast a)
+static ir_function make_ir_function(char *name, type *fret, vec(ast) args,
+				    vec(ast) rest)
 {
-	deq(char) s = adeq(char);
-	_show_ast(s, a);
-	return umd_to_cstr(s);
+	typetable table = new_table(vlen(args));
+
+	typeindex retindex = fret ? add_type(&table, *fret) : add_unknown(&table);
+
+	vec(ir) body = avec(ir); // TODO array to be able to jump
+	push(body, iskip(vlen(args)));
+
+	ir_funargs(&table, body, args);
+	parse_ir_block(&table, body, rest, 1);
+	// embed(&table, body, e);
+
+	// TODO return 
+	// TODO back propagate
+	// back_ir_propagate(&table, &init, 0);
+
+	// type iret = get_type(&table, init.index);
+	// if (fret) {
+	// 	type *ret = unify_types(fret, &iret);
+	// 	check(ret);
+	// 	change_type(&table, 0, *ret);
+	// }
+
+	// define self = def(name, retindex, init);
+
+	return (ir_function){.name = name, .table = table, .body = body};
+}
+
+static ir_function make_ir_extern(char *name, type ret, vec(ast) args)
+{
+	typetable table = new_table(vlen(args));
+	vec(ir) body = avec(ir); // TODO array to be able to jump
+	push(body, iskip(vlen(args)));
+
+	ir_funargs(&table, body, args);
+	ir_function f =
+	    (ir_function){.name = name, .table = table, .body = body};
+	f.flags = FUN_EXTERN;
+	return f;
+}
+
+static int parse_ir_top_one(context *ctx, vec(ast) items)
+{
+	if (match(items, R("fn"), R0, R0, L0)) {
+		char *name = vat(items, 1)->ref.name;
+		// TODO extraction hack
+		type t = list2type(items, 2, 3);
+		t.solid = 1;
+		vec(ast) args = vat(items, 3)->list.items;
+		vec(ast) body = vslice(items, 4, vlen(items));
+		push(ctx->irfns, make_ir_function(name, &t, args, body));
+		return 1;
+	}
+
+	if (match(items, R("fn"), R0, L0)) {
+		char *name = vat(items, 1)->ref.name;
+		vec(ast) args = vat(items, 2)->list.items;
+		vec(ast) body = vslice(items, 3, vlen(items));
+		push(ctx->irfns, make_ir_function(name, NULL, args, body));
+		return 1;
+	}
+
+	if (match(items, R("let"))) {
+		todo;
+		// if def, put to defs
+		return 1;
+	}
+
+	if (match(items, R("extern"), R("fn"), R0, R0, L0)) {
+		char *name = vat(items, 2)->ref.name;
+		// TODO extraction hack
+		type t = list2type(items, 3, 4);
+		t.solid = 1;
+		vec(ast) args = vat(items, 4)->list.items;
+		push(ctx->irfns, make_ir_extern(name, t, args));
+		return 1;
+	}
+
+	if (match(items, R("include"), &adiamond(NULL))) {
+		todo;
+		// char *name = vat(items, 1)->diamond.name;
+		// deq(char) inc = adeq(char);
+		// dprint(inc, "<%s>", name);
+		// return add_include(ctx, umd_to_cstr(inc));
+	}
+
+	if (match(items, R("include"), &astr(NULL))) {
+		char *name = vat(items, 1)->str.value;
+		deq(char) inc = adeq(char);
+		dprint(inc, "\"%s\"", name);
+		return add_include(ctx, umd_to_cstr(inc));
+	}
+
+	return 0;
+}
+
+static context parse_ir_top(vec(ast) items)
+{
+	context current = (context){
+	    .irfns = avec(ir_function), .includes = avec(char *),
+	    // TODO globals/consts
+	};
+
+	veach(items, it)
+	{
+		if (it.tag != A_LIST)
+			error("not a list: %s", show_ast(it));
+
+		if (!parse_ir_top_one(&current, it.list.items))
+			error("bad top ast: %s", show_ast(it));
+	}
+
+	return current;
+}
+
+static void cadd(vec(char) out, char *s)
+{
+	while (*s) {
+		push(out, *s);
+		s++;
+	}
 }
 
 static void print_ast(ast a) { printf("%s", show_ast(a)); }
@@ -455,53 +998,39 @@ static void printl_ast(ast a)
 	printf("\n");
 }
 
-static type list2type(context *ctx, vec(ast) items, size_t start, size_t end)
-{
-	check(end > start);
+// static vec(define) funargs(context *ctx, typetable *table, vec(ast) list)
+// {
+// 	vec(define) out = avec(define);
 
-	if (end - start == 1) {
-		ast *head = vat(items, start);
-		check(head->tag == A_REF);
-		char *name = head->ref.name;
-		return find_simple_type(ctx, name);
-	}
+// 	veach(list, it)
+// 	{
+// 		switch (it.tag) {
+// 		case A_REF: {
+// 			typeindex index = add_unknown(table);
+// 			push(out,
+// 			     (define){.name = it.ref.name, .index = index});
+// 		} break;
 
-	todo; // compound and funs
-}
+// 		case A_LIST: {
+// 			vec(ast) items = it.list.items;
+// 			check(vlen(items) > 1);
+// 			ast head = vget(items, 0);
+// 			check(head.tag == A_REF);
+// 			char *name = head.ref.name;
+// 			type t = list2type(items, 1, vlen(items));
+// 			t.solid = 1;
+// 			size_t index = add_type(table, t);
+// 			push(out, (define){.name = name, .index = index});
+// 		} break;
 
-static vec(define) funargs(context *ctx, typetable *table, vec(ast) list)
-{
-	vec(define) out = avec(define);
+// 		default: {
+// 			error("unexpected arg: %s", show_ast(it));
+// 		} break;
+// 		}
+// 	}
 
-	veach(list, it)
-	{
-		switch (it.tag) {
-		case A_REF: {
-			size_t index = add_unknown(table);
-			push(out,
-			     (define){.name = it.ref.name, .index = index});
-		} break;
-
-		case A_LIST: {
-			vec(ast) items = it.list.items;
-			check(vlen(items) > 1);
-			ast head = vget(items, 0);
-			check(head.tag == A_REF);
-			char *name = head.ref.name;
-			type t = list2type(ctx, items, 1, vlen(items));
-			t.solid = 1;
-			size_t index = add_type(table, t);
-			push(out, (define){.name = name, .index = index});
-		} break;
-
-		default: {
-			error("unexpected arg: %s", show_ast(it));
-		} break;
-		}
-	}
-
-	return out;
-}
+// 	return out;
+// }
 
 static ast atom_or_list(vec(ast) iter, size_t start, size_t end)
 {
@@ -521,248 +1050,216 @@ static ast atom_or_list(vec(ast) iter, size_t start, size_t end)
 	}
 }
 
-static ast parse_operator(context *ctx, typetable *table, vec(ast) list,
-			  size_t start)
-{
-	// TODO opreq, same as callreq
-	// TODO better find
-	size_t pos = vlen(list);
-	vloop(list, it, start, vlen(list), index)
-	{
-		if (is(it, O0)) {
-			pos = index;
-			break;
-		}
-	}
+// static ast parse_operator(context *ctx, typetable *table, vec(ast) list,
+// 			  size_t start)
+// {
+// 	// TODO opreq, same as callreq
+// 	// TODO better find
+// 	size_t pos = vlen(list);
+// 	vloop(list, it, start, vlen(list), index)
+// 	{
+// 		if (is(it, O0)) {
+// 			pos = index;
+// 			break;
+// 		}
+// 	}
 
-	size_t end = vlen(list);
+// 	size_t end = vlen(list);
 
-	if (start == end)
-		bug("received empty");
+// 	if (start == end)
+// 		bug("received empty");
 
-	if (pos == end) {
-		// TODO check empty list
-		return parse(ctx, table, atom_or_list(list, start, end));
-	}
+// 	if (pos == end) {
+// 		// TODO check empty list
+// 		return parse(ctx, table, atom_or_list(list, start, end));
+// 	}
 
-	if (pos == start) {
-		bug("%s: operator without left side", __func__);
-	}
+// 	if (pos == start) {
+// 		bug("%s: operator without left side", __func__);
+// 	}
 
-	assert(pos > start);
+// 	assert(pos > start);
 
-	ast *op = vat(list, pos);
-	assert(op->tag == A_OPER);
-	char *name = op->oper.name;
+// 	ast *op = vat(list, pos);
+// 	assert(op->tag == A_OPER);
+// 	char *name = op->oper.name;
 
-	ast left = parse(ctx, table, atom_or_list(list, start, pos));
-	ast right = parse_operator(ctx, table, list, pos + 1);
-	ast out = aoper(name, lift(left), lift(right));
-	out.index = add_unknown(table);
-	out.oper.index = add_opreq(table, (opreq){.name = name,
-						  .ret = out.index,
-						  .left = left.index,
-						  .right = right.index});
-	return out;
-}
+// 	ast left = parse(ctx, table, atom_or_list(list, start, pos));
+// 	ast right = parse_operator(ctx, table, list, pos + 1);
+// 	ast out = aoper(name, lift(left), lift(right));
+// 	out.index = add_unknown(table);
+// 	todo;
+// 	// out.oper.index = add_opreq(table, (opreq){.name = name,
+// 	// 					  .ret = out.index,
+// 	// 					  .left = left.index,
+// 	// 					  .right = right.index});
+// 	return out;
+// }
 
-static int _match(vec(ast) list, ast **patterns, size_t n)
-{
-	veach(list, it, index)
-	{
-		if (index == n)
-			return 1;
+// static ast parse_block(context *ctx, typetable *table, vec(ast) list,
+// 		       size_t start, size_t end)
+// {
+// 	// TODO compactor first
 
-		if (!is(it, patterns[index]))
-			return 0;
-	}
+// 	check(end >= start);
 
-	return vlen(list) == n;
-}
+// 	vec(define) defs = avec(define);
+// 	vec(ast) items = avec(ast);
 
-#define LEN(A) (sizeof(A) / sizeof((A)[0]))
-#define MA(...) ((ast *[]){__VA_ARGS__})
-#define match(L, ...) _match(L, MA(__VA_ARGS__), LEN(MA(__VA_ARGS__)))
+// 	// TODO defs in ctx
 
-static ast parse_block(context *ctx, typetable *table, vec(ast) list,
-		       size_t start, size_t end)
-{
-	// TODO compactor first
+// 	vloop(list, it, start, end)
+// 	{
+// 		ast b = parse(ctx, table, it);
+// 		push(items, b);
+// 	}
 
-	check(end >= start);
+// 	return ablock(NULL, defs, items); // TODO functions
+// }
 
-	vec(define) defs = avec(define);
-	vec(ast) items = avec(ast);
+// static void back_propagate(typetable *table, ast *a, size_t index)
+// {
+// 	// TODO verify types are upgradable
+// 	a->index = index;
+// 	switch (a->tag) {
+// 	case A_STR: {
+// 		todo;
+// 	} break;
+// 	case A_FLOAT: {
+// 		todo;
+// 	} break;
+// 	case A_INT: {
+// 		a->index = index;
+// 	} break;
+// 	case A_DIAMOND: {
+// 		todo;
+// 	} break;
+// 	case A_KW: {
+// 		todo;
+// 	} break;
+// 	case A_REF: {
+// 		a->ref.def->index = index;
+// 	} break;
+// 	case A_BLOCK: {
+// 		vec(ast) items = a->block.items;
+// 		bug_if_not(vlen(items));
+// 		back_propagate(table, vat(items, vlen(items) - 1), index);
+// 	} break;
+// 	case A_OPER: {
+// 		bug("oper");
+// 	} break;
+// 	case A_CALL: {
+// 		callreq *cr = get_callreqp(table, a->call.req);
+// 		cr->ret = index;
+// 	} break;
+// 	case A_LIST: {
+// 		bug("list");
+// 	} break;
+// 	}
 
-	// TODO defs in ctx
+// 	return;
+// }
 
-	vloop(list, it, start, end)
-	{
-		ast b = parse(ctx, table, it);
-		push(items, b);
-	}
+// static int make_fn(context *ctx, char *name, type *fret, vec(ast) args,
+// 		   vec(ast) body)
+// {
+// 	typetable table = new_table(vlen(args));
+// 	size_t retindex = fret ? add_type(&table, *fret) : add_unknown(&table);
 
-	return ablock(NULL, defs, items); // TODO functions
-}
+// 	// TODO funargs require context as well, inits might need it
+// 	vec(define) defs = funargs(ctx, &table, args);
 
-static void back_propagate(typetable *table, ast *a, size_t index)
-{
-	// TODO verify types are upgradable
-	a->index = index;
-	switch (a->tag) {
-	case A_STR: {
-		todo;
-	} break;
-	case A_FLOAT: {
-		todo;
-	} break;
-	case A_INT: {
-		a->index = index;
-	} break;
-	case A_DIAMOND: {
-		todo;
-	} break;
-	case A_KW: {
-		todo;
-	} break;
-	case A_REF: {
-		a->ref.def->index = index;
-	} break;
-	case A_BLOCK: {
-		vec(ast) items = a->block.items;
-		bug_if_not(vlen(items));
-		back_propagate(table, vat(items, vlen(items) - 1), index);
-	} break;
-	case A_OPER: {
-		bug("oper");
-	} break;
-	case A_CALL: {
-		callreq *cr = get_callreqp(table, a->call.req);
-		cr->ret = index;
-	} break;
-	case A_LIST: {
-		bug("list");
-	} break;
-	}
+// 	context local = chain_context(ctx);
+// 	local.defines = defs;
 
-	return;
-}
+// 	ast init = parse_block(&local, &table, body, 0, vlen(body)); // TODO
+// 	back_propagate(&table, &init, 0);
+// 	type iret = get_type(&table, init.index);
+// 	if (fret) {
+// 		type *ret = unify_types(fret, &iret);
+// 		check(ret);
+// 		change_type(&table, 0, *ret);
+// 	}
 
-static int make_fn(context *ctx, char *name, type *fret, vec(ast) args,
-		   vec(ast) body)
-{
-	typetable table = new_table();
-	size_t retindex = fret ? add_type(&table, *fret) : add_unknown(&table);
+// 	define self = def(name, retindex, init);
 
-	// TODO funargs require context as well, inits might need it
-	vec(define) defs = funargs(ctx, &table, args);
-	table.arity = vlen(args);
+// 	push(ctx->functions, fn(self, defs, table));
+// 	return 1;
+// }
 
-	context local = chain_context(ctx);
-	local.defines = defs;
+// static int make_extern(context *ctx, char *name, type ret, vec(ast) args)
+// {
+// 	for (; ctx; ctx = ctx->next) {
+// 		if (!ctx->functions)
+// 			continue;
 
-	ast init = parse_block(&local, &table, body, 0, vlen(body)); // TODO
-	back_propagate(&table, &init, 0);
-	type iret = get_type(&table, init.index);
-	if (fret) {
-		type *ret = unify_types(fret, &iret);
-		check(ret);
-		change_type(&table, 0, *ret);
-	}
+// 		typetable table = new_table(vlen(args));
+// 		size_t index = add_type(&table, ret);
+// 		define self =
+// 		    (define){.name = name, .index = index, .init = buggyast};
+// 		vec(define) defs = funargs(ctx, &table, args);
 
-	define self = def(name, retindex, init);
+// 		function f = fn(self, defs, table);
+// 		f.flags = FUN_EXTERN;
 
-	push(ctx->functions, fn(self, defs, table));
-	return 1;
-}
+// 		push(ctx->functions, f);
 
-static int make_extern(context *ctx, char *name, type ret, vec(ast) args)
-{
-	for (; ctx; ctx = ctx->next) {
-		if (!ctx->functions)
-			continue;
+// 		return 1;
+// 	}
 
-		typetable table = new_table();
-		size_t index = add_type(&table, ret);
-		define self =
-		    (define){.name = name, .index = index, .init = buggyast};
-		vec(define) defs = funargs(ctx, &table, args);
-		table.arity = vlen(defs);
+// 	bug("no externs");
+// }
 
-		function f = fn(self, defs, table);
-		f.flags = FUN_EXTERN;
+// static int parse_top_one(context *ctx, vec(ast) items)
+// {
+// 	if (match(items, R("fn"), R0, R0, L0)) {
+// 		char *name = vat(items, 1)->ref.name;
+// 		// TODO extraction hack
+// 		type t = list2type(items, 2, 3);
+// 		t.solid = 1;
+// 		vec(ast) args = vat(items, 3)->list.items;
+// 		vec(ast) body = vslice(items, 4, vlen(items));
+// 		return make_fn(ctx, name, &t, args, body);
+// 	}
 
-		push(ctx->functions, f);
+// 	if (match(items, R("fn"), R0, L0)) {
+// 		char *name = vat(items, 1)->ref.name;
+// 		vec(ast) args = vat(items, 2)->list.items;
+// 		vec(ast) body = vslice(items, 3, vlen(items));
+// 		return make_fn(ctx, name, NULL, args, body);
+// 	}
 
-		return 1;
-	}
+// 	if (match(items, R("let"))) {
+// 		todo;
+// 		// if def, put to defs
+// 		return 1;
+// 	}
 
-	bug("no externs");
-}
+// 	if (match(items, R("extern"), R("fn"), R0, R0, L0)) {
+// 		char *name = vat(items, 2)->ref.name;
+// 		// TODO extraction hack
+// 		type t = list2type(items, 3, 4);
+// 		t.solid = 1;
+// 		vec(ast) args = vat(items, 4)->list.items;
+// 		return make_extern(ctx, name, t, args);
+// 	}
 
-static int add_include(context *ctx, char *name)
-{
-	for (; ctx; ctx = ctx->next) {
-		if (!ctx->includes)
-			continue;
+// 	if (match(items, R("include"), &adiamond(NULL))) {
+// 		char *name = vat(items, 1)->diamond.name;
+// 		deq(char) inc = adeq(char);
+// 		dprint(inc, "<%s>", name);
+// 		return add_include(ctx, umd_to_cstr(inc));
+// 	}
 
-		push(ctx->includes, name);
-		return 1;
-	}
+// 	if (match(items, R("include"), &astr(NULL))) {
+// 		char *name = vat(items, 1)->str.value;
+// 		deq(char) inc = adeq(char);
+// 		dprint(inc, "\"%s\"", name);
+// 		return add_include(ctx, umd_to_cstr(inc));
+// 	}
 
-	bug("no includes");
-}
-
-static int parse_top_one(context *ctx, vec(ast) items)
-{
-	if (match(items, R("fn"), R0, R0, L0)) {
-		char *name = vat(items, 1)->ref.name;
-		// TODO extraction hack
-		type t = list2type(ctx, items, 2, 3);
-		t.solid = 1;
-		vec(ast) args = vat(items, 3)->list.items;
-		vec(ast) body = vslice(items, 4, vlen(items));
-		return make_fn(ctx, name, &t, args, body);
-	}
-
-	if (match(items, R("fn"), R0, L0)) {
-		char *name = vat(items, 1)->ref.name;
-		vec(ast) args = vat(items, 2)->list.items;
-		vec(ast) body = vslice(items, 3, vlen(items));
-		return make_fn(ctx, name, NULL, args, body);
-	}
-
-	if (match(items, R("let"))) {
-		todo;
-		// if def, put to defs
-		return 1;
-	}
-
-	if (match(items, R("extern"), R("fn"), R0, R0, L0)) {
-		char *name = vat(items, 2)->ref.name;
-		// TODO extraction hack
-		type t = list2type(ctx, items, 3, 4);
-		t.solid = 1;
-		vec(ast) args = vat(items, 4)->list.items;
-		return make_extern(ctx, name, t, args);
-	}
-
-	if (match(items, R("include"), &adiamond(NULL))) {
-		char *name = vat(items, 1)->diamond.name;
-		deq(char) inc = adeq(char);
-		dprint(inc, "<%s>", name);
-		return add_include(ctx, umd_to_cstr(inc));
-	}
-
-	if (match(items, R("include"), &astr(NULL))) {
-		char *name = vat(items, 1)->str.value;
-		deq(char) inc = adeq(char);
-		dprint(inc, "\"%s\"", name);
-		return add_include(ctx, umd_to_cstr(inc));
-	}
-
-	return 0;
-}
+// 	return 0;
+// }
 
 static int types_compatible(type a, type b)
 {
@@ -812,109 +1309,91 @@ static vec(function *)
 	return out;
 }
 
-static context parse_top(context *upper, vec(ast) items)
-{
-	context current = chain_context(upper);
-	current.functions = avec(function);
-	current.defines = avec(define);
-	current.includes = avec(char *);
+// static context parse_top(context *upper, vec(ast) items)
+// {
+// 	context current = chain_context(upper);
+// 	current.functions = avec(function);
+// 	current.defines = avec(define);
+// 	current.includes = avec(char *);
 
-	veach(items, it)
-	{
-		if (it.tag != A_LIST)
-			error("not a list: %s", show_ast(it));
+// 	veach(items, it)
+// 	{
+// 		if (it.tag != A_LIST)
+// 			error("not a list: %s", show_ast(it));
 
-		if (!parse_top_one(&current, it.list.items))
-			error("bad top ast: %s", show_ast(it));
-	}
+// 		if (!parse_top_one(&current, it.list.items))
+// 			error("bad top ast: %s", show_ast(it));
+// 	}
 
-	return current;
-}
+// 	return current;
+// }
 
-static ast parse_list(context *ctx, typetable *table, vec(ast) items)
-{
-	if (has(items, O0)) {
-		return parse_operator(ctx, table, items, 0);
-	}
+// static ast parse_list(context *ctx, typetable *table, vec(ast) items)
+// {
+// 	if (has(items, O0)) {
+// 		return parse_operator(ctx, table, items, 0);
+// 	}
 
-	ast *head = vat(items, 0);
-	assert(head->tag == A_REF);
-	char *name = head->ref.name;
+// 	ast *head = vat(items, 0);
+// 	assert(head->tag == A_REF);
+// 	char *name = head->ref.name;
 
-	vec(ast) args = avec(ast);
-	vec(size_t) arg_indices = avec(size_t);
-	vloop(items, item, 1, vlen(items))
-	{
-		ast arg = parse(ctx, table, item);
-		push(args, arg);
-		push(arg_indices, arg.index);
-	}
+// 	vec(ast) args = avec(ast);
+// 	vec(size_t) arg_indices = avec(size_t);
+// 	vloop(items, item, 1, vlen(items))
+// 	{
+// 		ast arg = parse(ctx, table, item);
+// 		push(args, arg);
+// 		push(arg_indices, arg.index);
+// 	}
 
-	ast out = acall(name, args);
-	out.index = add_unknown(table);
-	out.call.req = add_callreq(
-	    table,
-	    (callreq){.name = name, .ret = out.index, .args = arg_indices});
+// 	ast out = acall(name, args);
+// 	out.index = add_unknown(table);
+// 	out.call.req = add_callreq(
+// 	    table,
+// 	    (callreq){.name = name, .ret = out.index, .args = arg_indices});
 
-	return out;
-}
+// 	return out;
+// }
 
-static define *find_def(context *ctx, char *name)
-{
-	for (; ctx; ctx = ctx->next) {
-		if (!ctx->defines)
-			continue;
-
-		veach(ctx->defines, d, i, dp)
-		{
-			if (0 != strcmp(name, d.name))
-				continue;
-
-			return dp;
-		}
-	}
-
-	error("ref not found: %s", name);
-}
-
-ast parse(context *ctx, typetable *table, ast a)
-{
-	switch (a.tag) {
-	case A_STR: {
-		todo;
-	} break;
-	case A_FLOAT: {
-		todo;
-	} break;
-	case A_INT: {
-		a.index = add_type(table, tint(0));
-		return a;
-	} break;
-	case A_DIAMOND: {
-		todo;
-	} break;
-	case A_KW: {
-		todo;
-	} break;
-	case A_REF: {
-		a.ref.def = find_def(ctx, a.ref.name);
-		a.index = a.ref.def->index;
-		return a;
-	} break;
-	case A_BLOCK: {
-		bug("block");
-	} break;
-	case A_OPER: {
-		bug("oper");
-	} break;
-	case A_CALL: {
-		bug("call");
-	} break;
-	case A_LIST: {
-		return parse_list(ctx, table, a.list.items);
-	} break;
-	}
-}
+// ast parse(context *ctx, typetable *table, ast a)
+// {
+// 	switch (a.tag) {
+// 	case A_STR: {
+// 		todo;
+// 	} break;
+// 	case A_FLOAT: {
+// 		todo;
+// 	} break;
+// 	case A_INT: {
+// 		a.index = add_type(table, tint(0));
+// 		return a;
+// 	} break;
+// 	case A_DIAMOND: {
+// 		todo;
+// 	} break;
+// 	case A_KW: {
+// 		todo;
+// 	} break;
+// 	case A_REF: {
+// 		a.ref.def = find_def(ctx, a.ref.name);
+// 		a.index = a.ref.def->index;
+// 		return a;
+// 	} break;
+// 	case A_BLOCK: {
+// 		bug("block");
+// 	} break;
+// 	case A_OPER: {
+// 		bug("oper");
+// 	} break;
+// 	case A_CALL: {
+// 		bug("call");
+// 	} break;
+// 	case A_LIST: {
+// 		return parse_list(ctx, table, a.list.items);
+// 	} break;
+// 	}
+// }
 
 __attribute__((format(printf, 2, 3))) static void
 odec(output *o, const char *restrict fmt, ...)
@@ -1149,9 +1628,8 @@ static void compile_fn(context *ctx, typetable *table, function *fun)
 
 	veach(table->calls, req, i)
 	{
-		typetable t = new_table();
+		typetable t = new_table(vlen(req.args));
 		add_type(&t, get_type(table, req.ret));
-		t.arity = vlen(req.args);
 		veach(req.args, argi) { add_type(&t, get_type(table, argi)); }
 		compile(ctx, &t, req);
 	}
@@ -1244,17 +1722,25 @@ int main(int argc, char **argv)
 	    .implementations = avec(impl),
 	};
 
-	context topctx = parse_top(&upper, tops);
-	topctx.out = &out;
-	typetable maintable = new_table();
-	size_t mainret = add_type(&maintable, tint(0));
-	vec(size_t) mainargs = avec(size_t);
-	callreq mainreq =
-	    (callreq){.name = "main", .ret = mainret, .args = mainargs};
+	// context topctx = parse_top(&upper, tops);
+	// topctx.out = &out;
+	// typetable maintable = new_table();
+	// size_t mainret = add_type(&maintable, tint(0));
+	// vec(size_t) mainargs = avec(size_t);
+	// callreq mainreq =
+	//     (callreq){.name = "main", .ret = mainret, .args = mainargs};
 
-	odec(&out, "#include <stdint.h>\n");
-	emit_includes(&topctx);
-	compile(&topctx, &maintable, mainreq);
+	// odec(&out, "#include <stdint.h>\n");
+	// emit_includes(&topctx);
+	// compile(&topctx, &maintable, mainreq);
+
+	context topctx = parse_ir_top(tops);
+
+	veach(topctx.irfns, f)
+	{
+		log("%s", f.name);
+		dump_ir_full(&f.table, f.body);
+	}
 
 	printf("%s", umd_to_cstr(out.declarations));
 	printf("%s", umd_to_cstr(out.definitions));
