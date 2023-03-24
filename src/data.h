@@ -34,7 +34,6 @@ enum e_ir {
 	I_CLOSE,
 	I_DEF,
 	I_REF,
-	I_USE,
 	I_SET,
 	I_CALL,
 	I_OPER,
@@ -80,12 +79,8 @@ typedef struct ir {
 
 		struct {
 			size_t index; // of def
-		} ref;
-
-		struct {
-			size_t index; // in requests
 			char *name;
-		} use;
+		} ref;
 
 		struct {
 			typeindex index; // type
@@ -174,7 +169,6 @@ enum e_ast {
 	A_INT,
 	A_STR,
 	A_FLOAT,
-	A_CALL,
 	A_KW,
 	A_OPER,
 	A_BLOCK,
@@ -265,8 +259,7 @@ typedef struct ir_function {
 	((define){.name = NAME, .index = (INDEX), .init = (INIT)})
 
 #define iset(I) ((ir){.tag = I_SET, .set = {.index = I}})
-#define iref(I) ((ir){.tag = I_REF, .ref = {.index = I}})
-#define iuse(N, I) ((ir){.tag = I_USE, .use = {.index = I, .name = N}})
+#define iref(N, I) ((ir){.tag = I_REF, .ref = {.index = I, .name = N}})
 #define idef(N, I) ((ir){.tag = I_DEF, .def = {.index = I, .name = N}})
 #define ioper(I, N) ((ir){.tag = I_OPER, .oper = {.index = I, .count = N}})
 #define iskip(N) ((ir){.tag = I_SKIP, .skip = {.count = N}})
@@ -288,9 +281,6 @@ typedef struct ir_function {
 		   .functions = (FUNS), .defines = (DEFS), .items = (ITEMS)}})
 
 #define alist(ITEMS) ((ast){.tag = A_LIST, .list = {.items = (ITEMS)}})
-
-#define acall(N, ARGS)                                                         \
-	((ast){.tag = A_CALL, .call = {.name = (N), .args = (ARGS)}})
 
 #define aoper(N, L, R)                                                         \
 	((ast){.tag = A_OPER, .oper = {.name = (N), .left = (L), .right = (R)}})

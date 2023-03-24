@@ -15,14 +15,14 @@ EOF
 	cat > "$BUILD/bar.h" << EOF
 		int bar(int x, int y);
 EOF
-	RE $BUILD/ex.c
-	RE $BUILD/bar.c
-	LD ex $BUILD/bar.o $BUILD/ex.o 
-	if DO ex; then
-		echo >&2 RC 0
-	else
-		echo >&2 RC $?
-	fi
+	# RE $BUILD/ex.c
+	# RE $BUILD/bar.c
+	# LD ex $BUILD/bar.o $BUILD/ex.o 
+	# if DO ex; then
+	# 	echo >&2 RC 0
+	# else
+	# 	echo >&2 RC $?
+	# fi
 
 }
 
