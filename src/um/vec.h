@@ -127,7 +127,7 @@ static_assert(sizeof(_umv_b) == sizeof(_umv_bucket(char)), "bucket");
 // E  end index name
 // EI end index value
 #define UmVLoopImp(V, N, B, O, I, C, F, S, SI, E, EI)                          \
-	for (int(O) = 1, (F), (C), (I) = 0, (S) = (SI), (E) = (EI); O;         \
+	for (int(O) = 1, (F), (C), (I) = (SI), (S) = (SI), (E) = (EI); O;      \
 	     (O) = 0)                                                          \
 		for (UmVItemT(V)(N); (O); (O) = 0)                             \
 			for (UmVBucketT(V) * (B) =                             \

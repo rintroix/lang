@@ -833,9 +833,7 @@ static ir_function make_ir_function(char *name, type *fret, vec(ast) args,
 				    vec(ast) rest)
 {
 	typetable table = new_table(vlen(args));
-
 	typeindex retindex = fret ? add_type(&table, *fret) : add_unknown(&table);
-
 	vec(ir) body = avec(ir); // TODO array to be able to jump
 	push(body, iskip(vlen(args)));
 
@@ -862,6 +860,7 @@ static ir_function make_ir_function(char *name, type *fret, vec(ast) args,
 static ir_function make_ir_extern(char *name, type ret, vec(ast) args)
 {
 	typetable table = new_table(vlen(args));
+	typeindex retindex = add_type(&table, ret);
 	vec(ir) body = avec(ir); // TODO array to be able to jump
 	push(body, iskip(vlen(args)));
 
@@ -1204,54 +1203,32 @@ static void compile_ir(output *o, typetable *table, vec(ir) body, int indent)
 
 static void compile_ir_fn(output *o, ir_function f)
 {
-	log("%s", f.name);
+	log("-- %s --", f.name);
 	char *ret = compile_type(get_type(&f.table, (typeindex){0}));
+	int isextern = f.flags & FUN_EXTERN;
 	odec(o, "%s %s(", ret, f.name);
-	odec(o, ");\n");
-	if (f.flags & FUN_EXTERN) {
-	} else {
+	if (!isextern)
 		odef(o, "%s %s(", ret, f.name);
+	vloop(f.body, arg, 1, 1 + f.table.arity, i)
+	{
+		if (i > 1) {
+			odec(o, ", ");
+			if (!isextern)
+				odef(o, ", ");
+		}
+		bug_if_not(arg.tag == I_DEF);
+		bug_if_not(arg.def.index.value == i);
+		char *type = compile_type(get_type(&f.table, (typeindex){i}));
+		char *name = arg.def.name;
+		odec(o, "%s %s", type, name);
+		if (!isextern)
+			odef(o, "%s %s", type, name);
+	}
+	odec(o, ");\n");
+	if (!isextern) {
 		odef(o, ")\n");
 		dump_ir_full(&f.table, f.body);
 		compile_ir(o, &f.table, f.body, 0);
-	}
-}
-
-static ast returning(size_t tindex, ast a)
-{
-	switch (a.tag) {
-	case A_STR: {
-		todo;
-	} break;
-	case A_INT: {
-		todo;
-	} break;
-	case A_FLOAT: {
-		todo;
-	} break;
-	case A_DIAMOND: {
-		todo;
-	} break;
-	case A_KW: {
-		todo;
-	} break;
-	case A_BLOCK: {
-		size_t len = vlen(a.block.items);
-		if (!len)
-			bug("empty block requested to return");
-		ast *last = vat(a.block.items, len - 1);
-		*last = returning(tindex, *last);
-		return a;
-	} break;
-	case A_REF: {
-		todo;
-	} break;
-	case A_LIST: {
-		todo;
-	} break;
-	case A_OPER: {
-		todo;
-	} break;
 	}
 }
 
