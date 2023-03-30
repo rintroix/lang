@@ -29,12 +29,8 @@ typedef struct typeindex {
 
 enum e_ir {
 	I_SKIP = 1,	
-	I_RET,
-	I_OPEN,
-	I_CLOSE,
 	I_DEF,
 	I_REF,
-	I_SET,
 	I_CALL,
 	I_OPER,
 	I_LINT,
@@ -50,28 +46,6 @@ typedef struct ir {
 		} skip;
 
 		struct {
-			size_t index; // def
-		} set;
-
-		struct {
-			size_t count; // items inside
-		} open;
-
-		struct {
-			size_t index; // of open
-		} close;
-
-		struct {
-			size_t index; // in callreqs
-			size_t count; // args
-		} call;
-
-		struct {
-			size_t index; // in opreqs
-			size_t count; // operands in a tree
-		} oper;
-
-		struct {
 			typeindex index;
 			size_t count;
 			char *name;
@@ -83,8 +57,21 @@ typedef struct ir {
 		} ref;
 
 		struct {
+			size_t index; // in callreqs
+			size_t count; // args
+			size_t dst;
+		} call;
+
+		struct {
+			size_t index; // in opreqs
+			size_t count; // operands in a tree
+			size_t dst;
+		} oper;
+
+		struct {
 			typeindex index; // type
 			int value;
+			size_t dst;
 		} lint;
 	};
 } ir;

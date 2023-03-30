@@ -122,21 +122,21 @@ static char *_show_ir(typetable *t, ir e)
 	char *out;
 	switch (e.tag) {
 	case I_DEF: {
-		asprintf(&out, "DEF   %2zu %s", e.def.index.value,
+		asprintf(&out, "      DEF   %2zu %s", e.def.index.value,
 			 e.def.name ? e.def.name : ".");
 	} break;
 	case I_REF: {
-		asprintf(&out, "REF   %2zu %s", e.ref.index, e.ref.name);
+		asprintf(&out, "      REF   %2zu %s", e.ref.index, e.ref.name);
 	} break;
 	case I_CALL: {
-		asprintf(&out, "CALL  %2zu %s", e.call.count,
+		asprintf(&out, "%03zu = CALL  %2zu %s", e.call.dst, e.call.count,
 			 t ? get_callreqp(t, e.call.index)->name : "");
 	} break;
 	case I_OPER: {
 		todo;
 	} break;
 	case I_LINT: {
-		asprintf(&out, "LINT  %2zu %d", e.lint.index.value, e.lint.value);
+		asprintf(&out, "      LINT  %2zu %d", e.lint.index.value, e.lint.value);
 	} break;
 	case I_LSTR: {
 		todo;
@@ -145,19 +145,7 @@ static char *_show_ir(typetable *t, ir e)
 		todo;
 	} break;
 	case I_SKIP: {
-		asprintf(&out, "SKIP  %2zu", e.skip.count);
-	} break;
-	case I_OPEN: {
-		asprintf(&out, "OPEN");
-	} break;
-	case I_CLOSE: {
-		asprintf(&out, "CLOSE");
-	} break;
-	case I_SET: {
-		asprintf(&out, "SET   %2zu", e.set.index);
-	} break;
-	case I_RET: {
-		asprintf(&out, "RET");
+		asprintf(&out, "      SKIP  %2zu", e.skip.count);
 	} break;
 	}
 	return out;
@@ -382,13 +370,6 @@ static size_t add_def_unknown(typetable *table, vec(ir) body, char *name)
 {
 	typeindex tindex = add_unknown(table);
 	return push(body, idef(name, tindex));
-}
-
-static ir add_return(typetable *table, vec(ir) body, ir e)
-{
-	push(body, (ir){.tag=I_RET});
-	push(body, e);
-	return iskip(0);
 }
 
 static size_t add_opreq(typetable *table, opreq o)
@@ -743,13 +724,11 @@ static ir parse_ir(typetable *table, vec(ir) body, ast a)
 	bug("unreachable");
 }
 
-static ir parse_ir_block(typetable *table, vec(ir) body, vec(ast) items,
-			 int ret)
+static ir parse_ir_block(typetable *table, vec(ir) body, vec(ast) items)
 {
 	// TODO compactor first
 	bug_if_not(vlen(items));
 
-	size_t openidx = push(body, (ir){.tag = I_OPEN});
 	size_t reservedidx = push(body, iskip(1));
 	push(body, iskip(0)); // DEF no assign
 
@@ -759,44 +738,7 @@ static ir parse_ir_block(typetable *table, vec(ir) body, vec(ast) items,
 		ir e = parse_ir(table, body, a);
 
 		if (i + 1 == vlen(items)) {
-
-			if (ret) {
-				ir r = add_return(table, body, e);
-				size_t idx = push(
-				    body, (ir){.tag = I_CLOSE,
-					       .close = {.index = openidx}});
-				return r;
-			} else {
-				size_t idx = push(
-				    body, (ir){.tag = I_CLOSE,
-					       .close = {.index = openidx}});
-				switch (e.tag) {
-				case I_REF: {
-					bug_if(e.ref.name);
-					if (e.ref.index < openidx)
-						bug("outer def");
-					ir *defp = vat(body, e.ref.index);
-					ir *next = vat(body, e.ref.index + 1);
-					bug_if_not(defp->tag == I_DEF);
-					bug_if(defp->def.count);
-					if (next->tag == I_SKIP) {
-						todo;
-					} else {
-						ir *reserved =
-						    vat(body, reservedidx);
-						*reserved = *defp;
-						reserved->def.count++;
-						*defp = iset(reservedidx);
-						return iref(NULL, reservedidx);
-					}
-				} break;
-				case I_LINT: {
-					return e;
-				} break;
-				default:
-					bug("bad ir: %s", show_ir(e));
-				}
-			}
+			return e;
 		} else {
 			discard(table, body, e);
 		}
@@ -838,10 +780,10 @@ static ir_function make_ir_function(char *name, type *fret, vec(ast) args,
 	push(body, iskip(vlen(args)));
 
 	ir_funargs(&table, body, args);
-	parse_ir_block(&table, body, rest, 1);
+	ir e = parse_ir_block(&table, body, rest);
+	// TODO return 
 	// embed(&table, body, e);
 
-	// TODO return 
 	// TODO back propagate
 	// back_ir_propagate(&table, &init, 0);
 
@@ -1100,18 +1042,6 @@ static void compile_ir(output *o, typetable *table, vec(ir) body, int indent)
 			skip = e.skip.count;
 			continue;
 		} break;
-		case I_OPEN: {
-			bug_if(sub || arg);
-			odef(o, "%*s{\n", indent, "");
-			indent += 2;
-			continue;
-		} break;
-		case I_CLOSE: {
-			bug_if(sub || arg);
-			indent -= 2;
-			odef(o, "%*s}\n", indent, "");
-			continue;
-		} break;
 		default:
 			break;
 		}
@@ -1122,18 +1052,6 @@ static void compile_ir(output *o, typetable *table, vec(ir) body, int indent)
 		switch (e.tag) {
 		case I_SKIP: {
 			bug("skip");
-		} break;
-		case I_RET: {
-			bug_if(sub || arg);
-			odef(o, "return ");
-			sub = 1;
-			continue;
-		} break;
-		case I_OPEN: {
-			bug("open");
-		} break;
-		case I_CLOSE: {
-			bug("close");
 		} break;
 		case I_DEF: {
 			bug_if(sub || arg);
@@ -1149,19 +1067,10 @@ static void compile_ir(output *o, typetable *table, vec(ir) body, int indent)
 		} break;
 		case I_REF: {
 			bug_if_not(sub || arg);
-			odef(o, "REF(%s/%zu)", e.ref.name, e.ref.index);
-		} break;
-		case I_SET: {
-			bug_if(sub || arg);
-			odef(o, "%*s", indent, "");
-			ir d = vget(body, e.set.index);
-			bug_if_not(d.tag == I_DEF);
-			odef(o, "%s = ", d.def.name ? d.def.name : "GEN");
-			sub = 1;
-			continue;
+			odef(o, "REF/%zu/%s", e.ref.index, e.ref.name);
 		} break;
 		case I_CALL: {
-			odef(o, "CALL(%s)(",
+			odef(o, "CALL/%s(",
 			     get_callreqp(table, e.call.index)->name);
 			arg = e.call.count;
 			if (arg)
@@ -1226,9 +1135,10 @@ static void compile_ir_fn(output *o, ir_function f)
 	}
 	odec(o, ");\n");
 	if (!isextern) {
-		odef(o, ")\n");
+		odef(o, ")\n{\n");
 		dump_ir_full(&f.table, f.body);
-		compile_ir(o, &f.table, f.body, 0);
+		compile_ir(o, &f.table, f.body, 2);
+		odef(o, "}\n");
 	}
 }
 
