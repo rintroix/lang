@@ -39,11 +39,10 @@ static int add_include(context *ctx, char *name)
 
 static ast buggyast = (ast){.tag = A_KW, .kw = {.name = "!BUG!"}};
 
-#define lift(...)                                                              \
-	_Generic((__VA_ARGS__), ast : alift, type : tlift)(__VA_ARGS__)
+#define lift(...) _Generic((__VA_ARGS__), ast: alift, type: tlift)(__VA_ARGS__)
 
 #define trace(...)                                                             \
-	_Generic((__VA_ARGS__), ast * : aptrace, type : ttrace)(__VA_ARGS__)
+	_Generic((__VA_ARGS__), ast *: aptrace, type: ttrace)(__VA_ARGS__)
 
 typedef enum e_flags {
 	F_RETURN = 1 << 0,
@@ -121,23 +120,21 @@ static char *_show(typetable *t, ir e)
 	switch (e.tag) {
 	case I_DEF: {
 		asprintf(&out, "      DEF   %2zu %s", e.def.index.value,
-			 e.def.name ? e.def.name : ".");
+				 e.def.name ? e.def.name : ".");
 	} break;
 	case I_REF: {
 		char *r = e.ref.dst == 0 ? "000 =" : "     ";
 		asprintf(&out, "%s REF   %2zu %s", r, e.ref.index, e.ref.name);
 	} break;
 	case I_CALL: {
-		asprintf(&out, "%03zu = CALL  %2zu %s", e.call.dst,
-			 e.call.count,
-			 t ? get_callreqp(t, e.call.index)->name : "");
+		asprintf(&out, "%03zu = CALL  %2zu %s", e.call.dst, e.call.count,
+				 t ? get_callreqp(t, e.call.index)->name : "");
 	} break;
 	case I_OPER: {
 		todo;
 	} break;
 	case I_LINT: {
-		asprintf(&out, "      LINT  %2zu %d", e.lint.index.value,
-			 e.lint.value);
+		asprintf(&out, "      LINT  %2zu %d", e.lint.index.value, e.lint.value);
 	} break;
 	case I_LSTR: {
 		todo;
@@ -323,8 +320,8 @@ static inline type *unify_types(type *a, type *b)
 {
 	type *r = _unify_types(a, b);
 	dbg("UNIFY: %s%s + %s%s = %s%s", show_type(*a), a->solid ? "!" : "",
-	    show_type(*b), b->solid ? "!" : "", r ? show_type(*r) : "!FAIL!",
-	    (r && r->solid) ? "!" : "");
+		show_type(*b), b->solid ? "!" : "", r ? show_type(*r) : "!FAIL!",
+		(r && r->solid) ? "!" : "");
 	return r;
 }
 
@@ -340,8 +337,7 @@ static void change_type(typetable *table, size_t index, type t)
 
 static typeindex add_unknown(typetable *table)
 {
-	type t =
-	    (type){.tag = T_UNKNOWN, .unknown = {.index = vlen(table->types)}};
+	type t = (type){.tag = T_UNKNOWN, .unknown = {.index = vlen(table->types)}};
 	return add_type(table, t);
 }
 
@@ -403,22 +399,22 @@ static type *get_typep(typetable *table, typeindex index)
 static typetable new_table(size_t arity)
 {
 	return (typetable){
-	    .types = avec(type),
-	    .calls = avec(callreq),
-	    .ops = avec(opreq),
-	    .uses = avec(size_t),
-	    .arity = arity,
+		.types = avec(type),
+		.calls = avec(callreq),
+		.ops = avec(opreq),
+		.uses = avec(size_t),
+		.arity = arity,
 	};
 }
 
 static typetable clone_table(typetable table)
 {
 	return (typetable){
-	    .types = vslice(table.types, 0, vlen(table.types)),
-	    .calls = vslice(table.calls, 0, vlen(table.calls)),
-	    .ops = vslice(table.ops, 0, vlen(table.ops)),
-	    .uses = vslice(table.uses, 0, vlen(table.ops)), // TODO RO
-	    .arity = table.arity,
+		.types = vslice(table.types, 0, vlen(table.types)),
+		.calls = vslice(table.calls, 0, vlen(table.calls)),
+		.ops = vslice(table.ops, 0, vlen(table.ops)),
+		.uses = vslice(table.uses, 0, vlen(table.ops)), // TODO RO
+		.arity = table.arity,
 	};
 }
 
@@ -588,7 +584,7 @@ static size_t count_operands(opreq r)
 }
 
 static opreq parse_operator(typetable *table, vec(ir) body, vec(ir) post,
-			    vec(ast) items, size_t start);
+							vec(ast) items, size_t start);
 
 static ir parse_list(typetable *table, vec(ir) body, vec(ast) items)
 {
@@ -604,8 +600,8 @@ static ir parse_list(typetable *table, vec(ir) body, vec(ast) items)
 		dbg("OPERATOR");
 		dump(post);
 		todo; // copy over post items
-		      // make gen def
-		      // return gen def
+			  // make gen def
+			  // return gen def
 	}
 
 	ast *head = vat(items, 0);
@@ -622,22 +618,21 @@ static ir parse_list(typetable *table, vec(ir) body, vec(ast) items)
 	size_t call_def_index = add_gen_unknown(table, body);
 	size_t call_index = vlen(body);
 
-	size_t reqidx =
-	    add_callreq(table, (callreq){.name = name,
-					 .defidx = call_def_index,
-					 .argsidx = call_index + 1});
+	size_t reqidx = add_callreq(table, (callreq){.name = name,
+												 .defidx = call_def_index,
+												 .argsidx = call_index + 1});
 
 	push(body, (ir){.tag = I_CALL,
-			.call = {.dst = call_def_index,
-				 .index = reqidx,
-				 .count = vlen(post)}});
+					.call = {.dst = call_def_index,
+							 .index = reqidx,
+							 .count = vlen(post)}});
 	veach(post, item) { embed(table, body, item); }
 
 	return iref(NULL, call_def_index);
 }
 
 static ir parse_many(typetable *table, vec(ir) body, vec(ast) items,
-		     size_t start, size_t end)
+					 size_t start, size_t end)
 {
 	bug_if(end == start);
 
@@ -648,7 +643,7 @@ static ir parse_many(typetable *table, vec(ir) body, vec(ast) items,
 }
 
 static opreq parse_operator(typetable *table, vec(ir) body, vec(ir) post,
-			    vec(ast) items, size_t start)
+							vec(ast) items, size_t start)
 {
 	// TODO opreq, same as callreq
 	// TODO better find
@@ -828,7 +823,7 @@ static void return_that(typetable *table, vec(ir) body, ir e)
 }
 
 static ir_function make_function(char *name, type *fret, vec(ast) args,
-				 vec(ast) rest)
+								 vec(ast) rest)
 {
 	typetable table = new_table(vlen(args));
 	vec(ir) body = avec(ir); // TODO array to be able to jump
@@ -862,8 +857,7 @@ static ir_function make_extern(char *name, type ret, vec(ast) args)
 	add_def(&table, body, "-ret-", ret);
 
 	ir_funargs(&table, body, args);
-	ir_function f =
-	    (ir_function){.name = name, .table = table, .body = body};
+	ir_function f = (ir_function){.name = name, .table = table, .body = body};
 	f.flags = FUN_EXTERN;
 	return f;
 }
@@ -926,8 +920,8 @@ static int parse_top_one(context *ctx, vec(ast) items)
 static context parse_top(vec(ast) items)
 {
 	context current = (context){
-	    .irfns = avec(ir_function), .includes = avec(char *),
-	    // TODO globals/consts
+		.irfns = avec(ir_function), .includes = avec(char *),
+		// TODO globals/consts
 	};
 
 	veach(items, it)
@@ -996,7 +990,7 @@ static int table_compatible(typetable a, typetable b)
 }
 
 static vec(function *)
-    find_candidates(context *ctx, typetable *table, char *name)
+	find_candidates(context *ctx, typetable *table, char *name)
 {
 	vec(function *) out = avec(function *);
 
@@ -1075,13 +1069,12 @@ static int oreg(output *o, function *fp, typetable table)
 		check(written > 0);
 	}
 
-	push(o->implementations,
-	     (impl){.fp = fp, .table = table, .name = name});
+	push(o->implementations, (impl){.fp = fp, .table = table, .name = name});
 	return 1;
 }
 
 static void compile(output *o, typetable *table, vec(ir) body, int skip,
-		    int indent)
+					int indent)
 {
 	int sub = 0;
 	uint arg = 0;
@@ -1133,8 +1126,7 @@ static void compile(output *o, typetable *table, vec(ir) body, int skip,
 			odef(o, "REF/%zu/%s", e.ref.index, e.ref.name);
 		} break;
 		case I_CALL: {
-			odef(o, "CALL/%s(",
-			     get_callreqp(table, e.call.index)->name);
+			odef(o, "CALL/%s(", get_callreqp(table, e.call.index)->name);
 			arg = e.call.count;
 			if (arg)
 				continue;
@@ -1276,14 +1268,14 @@ int main(int argc, char **argv)
 	bug_if(a.tag != 0);
 
 	context upper = (context){
-	    .defines = avec(define),
-	    .macros = avec(macro),
+		.defines = avec(define),
+		.macros = avec(macro),
 	};
 
 	output out = (output){
-	    .definitions = adeq(char),
-	    .declarations = adeq(char),
-	    .implementations = avec(impl),
+		.definitions = adeq(char),
+		.declarations = adeq(char),
+		.implementations = avec(impl),
 	};
 
 	// context topctx = parse_top(&upper, tops);

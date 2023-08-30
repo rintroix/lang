@@ -54,14 +54,10 @@ TEST empty_vec(void)
 	ASSERT(umv_len(b) == 0);
 
 	int sum = 0;
-	umv_each(a, n) {
-		sum += n;
-	}
+	umv_each(a, n) { sum += n; }
 	ASSERT(sum == 0);
 
-	umv_loop(a, n, 0, umv_len(a)) {
-		sum += n;
-	}
+	umv_loop(a, n, 0, umv_len(a)) { sum += n; }
 	ASSERT(sum == 0);
 
 	PASS();
@@ -82,9 +78,7 @@ TEST deqs(void)
 	ASSERT(umd_len(a) == 5);
 
 	int suma = 0;
-	umd_each(a, n) {
-		suma += n;	
-	}
+	umd_each(a, n) { suma += n; }
 
 	ASSERT(suma == 500 + 400 + 300 + 200 + 100);
 
@@ -94,7 +88,7 @@ TEST deqs(void)
 	ASSERT(umd_get(a, 3) == 400);
 	ASSERT(umd_get(a, 4) == 500);
 
-	umd(int*) b = umd_new_manual(int*, 2);
+	umd(int *) b = umd_new_manual(int *, 2);
 	int i1 = 10, i2 = 20, i3 = 30;
 
 	ASSERT(0 == umd_push(b, &i1));
@@ -106,16 +100,15 @@ TEST deqs(void)
 	ASSERT(umd_get(b, 2) == &i3);
 
 	int sumb = 0;
-	umd_each(b, n) {
-		sumb += *n;	
-	}
+	umd_each(b, n) { sumb += *n; }
 
 	ASSERT(sumb == 10 + 20 + 30);
 
 	PASS();
 }
 
-TEST strs(void) {
+TEST strs(void)
+{
 	char *init = "what's up, hello";
 	umd(char) a = umd_dup_exact(init);
 
@@ -128,10 +121,10 @@ TEST strs(void) {
 
 	umd(char) s1 = umd_dup_exact("hi");
 
-	ASSERT( 0 == umd_cmp(s1, "hi"));
+	ASSERT(0 == umd_cmp(s1, "hi"));
 	ASSERT(-1 == umd_cmp(s1, "hit"));
-	ASSERT( 1 == umd_cmp(s1, "ha"));
-	ASSERT( 1 == umd_cmp(s1, "h"));
+	ASSERT(1 == umd_cmp(s1, "ha"));
+	ASSERT(1 == umd_cmp(s1, "h"));
 
 	umd_append_fmt(s1, "X");
 	umd_append_fmt(s1, "Y");
@@ -140,16 +133,17 @@ TEST strs(void) {
 	ASSERT(0 == umd_cmp(s1, "hiXYX"));
 
 	umd(char) s2 = umd_dup_exact("oh, hello ");
-	umd_append_fmt(s2, "world"); 
+	umd_append_fmt(s2, "world");
 	umd_append_fmt(s2, "!");
 	umd_append_fmt(s2, "!!");
 
 	ASSERT(0 == umd_cmp(s2, "oh, hello world!!!"));
- 
+
 	PASS();
 }
 
-TEST pow2(void) {
+TEST pow2(void)
+{
 	ASSERT(um_next_pow2(1) == 1);
 	ASSERT(um_next_pow2(4) == 4);
 	ASSERT(um_next_pow2(127) == 128);
@@ -165,10 +159,7 @@ SUITE(containers)
 	RUN_TEST(empty_vec);
 }
 
-SUITE(utils)
-{
-	RUN_TEST(pow2);
-}
+SUITE(utils) { RUN_TEST(pow2); }
 
 GREATEST_MAIN_DEFS();
 

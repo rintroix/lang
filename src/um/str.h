@@ -16,7 +16,7 @@ static inline umd(char) umd_dup_exact(const char *restrict s)
 }
 
 static inline int umd_append_vfmt(umd(char) xs, const char *restrict fmt,
-				  va_list base)
+								  va_list base)
 {
 	va_list clone;
 	va_copy(clone, base);

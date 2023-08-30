@@ -8,18 +8,18 @@
 #endif
 
 #define _umd_head(T)                                                           \
-	struct {                                                               \
-		size_t cap;                                                    \
-		size_t len;                                                    \
-		_umd_bucket(T) bucket;                                         \
+	struct {                                                                   \
+		size_t cap;                                                            \
+		size_t len;                                                            \
+		_umd_bucket(T) bucket;                                                 \
 	}
 
 #define _umd_bucket(T)                                                         \
-	struct {                                                               \
-		size_t start;                                                  \
-		size_t end;                                                    \
-		void *next;                                                    \
-		T data[];                                                      \
+	struct {                                                                   \
+		size_t start;                                                          \
+		size_t end;                                                            \
+		void *next;                                                            \
+		T data[];                                                              \
 	}
 
 typedef struct _umd_b {
@@ -62,19 +62,19 @@ static_assert(sizeof(_umd_b) == sizeof(_umd_bucket(char)), "bucket");
 #define UmDPushAt(D) (UmDItemT(D) *)_umd_push_at(UmDGHead(D), UmDItemS(D))
 #define UmDCountBuckets(D) _umd_count_buckets(UmDGBucket(D))
 #define UmDAddBucket(B, CAP, ONE)                                              \
-	do {                                                                   \
-		assert(!(B)->next);                                            \
-		(B)->next = _umd_alloc_bucket(CAP, ONE);                       \
-		(B) = (B)->next;                                               \
+	do {                                                                       \
+		assert(!(B)->next);                                                    \
+		(B)->next = _umd_alloc_bucket(CAP, ONE);                               \
+		(B) = (B)->next;                                                       \
 	} while (0)
 
 #define UmDDump(D)                                                             \
-	do {                                                                   \
-		printf("DEQ DUMP for '%s'\n", #D);                             \
-		printf("\tSELF %p CAP %zu LEN %zu\n", UmDHead(D),              \
-		       UmDHead(D)->cap, UmDHead(D)->len);                      \
-		printf("\tBUCKET %p START %zu END %zu\n", UmDBucket(D),        \
-		       UmDBucket(D)->start, UmDBucket(D)->end);                \
+	do {                                                                       \
+		printf("DEQ DUMP for '%s'\n", #D);                                     \
+		printf("\tSELF %p CAP %zu LEN %zu\n", UmDHead(D), UmDHead(D)->cap,     \
+			   UmDHead(D)->len);                                               \
+		printf("\tBUCKET %p START %zu END %zu\n", UmDBucket(D),                \
+			   UmDBucket(D)->start, UmDBucket(D)->end);                        \
 	} while (0)
 
 #define UmDEachN(a, b, c, d, e, f, g, X, ...) UmDEachImp##X
@@ -95,13 +95,12 @@ static_assert(sizeof(_umd_b) == sizeof(_umd_bucket(char)), "bucket");
 // I overall index
 // C bucket index
 #define UmDEachImp(D, N, B, O, I, C)                                           \
-	for (int(O) = 1, (C) = 0, (I) = 0; (O); (O) = 0)                       \
-		for (UmDItemT(D)(N); (O); (O) = 0)                             \
-			for (UmDBucketT(D) * (B) = (void *)UmDBucket(D); (B);  \
-			     (B) = (B)->next)                                  \
-				for ((C) = (B)->start, (N) = (B)->data[C];     \
-				     (C) < (B)->end;                           \
-				     (C)++, (I)++, (N) = (B)->data[C])
+	for (int(O) = 1, (C) = 0, (I) = 0; (O); (O) = 0)                           \
+		for (UmDItemT(D)(N); (O); (O) = 0)                                     \
+			for (UmDBucketT(D) * (B) = (void *)UmDBucket(D); (B);              \
+				 (B) = (B)->next)                                              \
+				for ((C) = (B)->start, (N) = (B)->data[C]; (C) < (B)->end;     \
+					 (C)++, (I)++, (N) = (B)->data[C])
 
 // B bucket
 // N amount of free items needed
@@ -127,7 +126,7 @@ static inline _umd_b *_umd_alloc_bucket(size_t cap, size_t one)
 }
 
 static inline _umd_b *_umd_last_bucket(_umd_b *b, size_t n, size_t cap,
-				       size_t one)
+									   size_t one)
 {
 	assert(n <= cap);
 

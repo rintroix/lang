@@ -5,10 +5,9 @@
 
 #define log(...) _log(__VA_ARGS__, "\n")
 #define _log(FMT, ...)                                                         \
-	fprintf(stderr, "%s:%s:%d " FMT "%s",                                  \
-		strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1            \
-				       : __FILE__,                             \
-		__func__, __LINE__, __VA_ARGS__)
+	fprintf(stderr, "%s:%s:%d " FMT "%s",                                      \
+			strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__,    \
+			__func__, __LINE__, __VA_ARGS__)
 
 #define _elog(CODE, ...) (log(__VA_ARGS__), abort(), exit(CODE))
 
@@ -17,7 +16,8 @@
 #define bug_if(...) ((__VA_ARGS__) ? (bug("%s", #__VA_ARGS__), 0) : 1)
 #define bug_if_not(...) ((__VA_ARGS__) ? 1 : (bug("not %s", #__VA_ARGS__), 0))
 #define error(...) _elog(1, "error: " __VA_ARGS__)
-#define check(...) ((__VA_ARGS__) ? 1 : (_elog(1, "check: not %s", #__VA_ARGS__), 0))
+#define check(...)                                                             \
+	((__VA_ARGS__) ? 1 : (_elog(1, "check: not %s", #__VA_ARGS__), 0))
 
 #ifdef DEBUG
 #define dbg(...) log("debug: " __VA_ARGS__)

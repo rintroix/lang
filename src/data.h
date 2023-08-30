@@ -28,7 +28,7 @@ typedef struct typeindex {
 } typeindex;
 
 enum e_ir {
-	I_SKIP = 1,	
+	I_SKIP = 1,
 	I_DEF,
 	I_REF,
 	I_CALL,
@@ -39,7 +39,7 @@ enum e_ir {
 };
 
 typedef struct ir {
-	enum e_ir tag;	
+	enum e_ir tag;
 	union {
 		struct {
 			size_t count;
@@ -115,8 +115,8 @@ typedef struct opreq {
 	union {
 		struct {
 			char *name;
-			struct opreq* left;
-			struct opreq* right;
+			struct opreq *left;
+			struct opreq *right;
 		} op;
 
 		struct {
@@ -146,10 +146,10 @@ typedef struct typetable {
 } typetable;
 
 #define fn(DEF, ARGS, TABLE)                                                   \
-	((function){                                                           \
-	    .self = (DEF),                                                     \
-	    .args = (ARGS),                                                    \
-	    .table = (TABLE),                                                  \
+	((function){                                                               \
+		.self = (DEF),                                                         \
+		.args = (ARGS),                                                        \
+		.table = (TABLE),                                                      \
 	})
 
 enum e_ast {
@@ -265,9 +265,9 @@ typedef struct ir_function {
 #define aint(V) ((ast){.tag = A_INT, .integer = {.value = (V)}})
 
 #define ablock(FUNS, DEFS, ITEMS)                                              \
-	((ast){.tag = A_BLOCK,                                                 \
-	       .block = {                                                      \
-		   .functions = (FUNS), .defines = (DEFS), .items = (ITEMS)}})
+	((ast){                                                                    \
+		.tag = A_BLOCK,                                                        \
+		.block = {.functions = (FUNS), .defines = (DEFS), .items = (ITEMS)}})
 
 #define alist(ITEMS) ((ast){.tag = A_LIST, .list = {.items = (ITEMS)}})
 

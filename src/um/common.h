@@ -2,9 +2,9 @@
 #define UM_COMMON_H
 
 #include <assert.h>
-#include <stdlib.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifndef UM_CHUNK_SIZE
@@ -26,7 +26,7 @@ static inline uint32_t um_next_pow2(uint32_t x)
 	x |= (x >> 4);
 	x |= (x >> 8);
 	x |= (x >> 16);
-	
+
 	return x + 1;
 }
 

@@ -12,17 +12,17 @@
 #endif
 
 #define _umv_head(T)                                                           \
-	struct {                                                               \
-		size_t cap;                                                    \
-		size_t len;                                                    \
-		_umv_bucket(T) bucket;                                         \
+	struct {                                                                   \
+		size_t cap;                                                            \
+		size_t len;                                                            \
+		_umv_bucket(T) bucket;                                                 \
 	}
 
 #define _umv_bucket(T)                                                         \
-	struct {                                                               \
-		size_t end;                                                    \
-		void *next;                                                    \
-		T data[];                                                      \
+	struct {                                                                   \
+		size_t end;                                                            \
+		void *next;                                                            \
+		T data[];                                                              \
 	}
 
 typedef struct _umv_b {
@@ -52,8 +52,8 @@ static_assert(sizeof(_umv_b) == sizeof(_umv_bucket(char)), "bucket");
 #define umv_slice(V, START, END)                                               \
 	umv_slice_into(V, umv_new(UmVItemT(V)), START, END)
 #define umv_slice_into(V, DST, START, END)                                     \
-	(__typeof__(V))_umv_slice((_umv_h *)(DST), UmVGHead(V), UmVItemS(V),   \
-				  START, END)
+	(__typeof__(V))_umv_slice((_umv_h *)(DST), UmVGHead(V), UmVItemS(V),       \
+							  START, END)
 
 #define UmV(V) umv(UmVItemT(V))
 #define UmVItem(V) ***V
@@ -69,16 +69,16 @@ static_assert(sizeof(_umv_b) == sizeof(_umv_bucket(char)), "bucket");
 #define UmVPushAt(V) (UmVItemT(V) *)_umv_push_at(UmVGHead(V), UmVItemS(V))
 #define UmVCountBuckets(V) _umv_count_buckets(UmVGBucket(V))
 #define UmVAddBucket(B, CAP, ONE)                                              \
-	do {                                                                   \
-		assert(!(B)->next);                                            \
-		(B)->next = _umv_alloc_bucket(CAP, ONE);                       \
-		(B) = (B)->next;                                               \
+	do {                                                                       \
+		assert(!(B)->next);                                                    \
+		(B)->next = _umv_alloc_bucket(CAP, ONE);                               \
+		(B) = (B)->next;                                                       \
 	} while (0)
 
 #define UmVDump(V)                                                             \
-	do {                                                                   \
-		printf("VEC DUMP CAP %zu\n", UmVHead(V)->cap);                 \
-		printf("\tBUCKET END %zu\n", UmVBucket(V)->end);               \
+	do {                                                                       \
+		printf("VEC DUMP CAP %zu\n", UmVHead(V)->cap);                         \
+		printf("\tBUCKET END %zu\n", UmVBucket(V)->end);                       \
 	} while (0)
 
 #define UmVEachN(a, b, c, d, e, f, g, X, ...) UmVEachImp##X
@@ -95,8 +95,8 @@ static_assert(sizeof(_umv_b) == sizeof(_umv_bucket(char)), "bucket");
 #define UmVLoopImpN(V, NAME, START, END)                                       \
 	UmVLoopImpI(V, NAME, START, END, UmGen(_i))
 #define UmVLoopImpI(V, NAME, START, END, INDEX)                                \
-	UmVLoopImp(V, NAME, UmGen(_h), UmGen(_o), INDEX, UmGen(_c), UmGen(_f), \
-		   UmGen(_s), START, UmGen(_e), END)
+	UmVLoopImp(V, NAME, UmGen(_h), UmGen(_o), INDEX, UmGen(_c), UmGen(_f),     \
+			   UmGen(_s), START, UmGen(_e), END)
 
 // V self
 // N name
@@ -106,14 +106,13 @@ static_assert(sizeof(_umv_b) == sizeof(_umv_bucket(char)), "bucket");
 // C bucket index
 // P pointer to value
 #define UmVEachImp(V, N, B, O, I, C, P)                                        \
-	for (int(O) = 1, (C) = 0, (I) = 0; (O); (O) = 0)                       \
-		for (UmVItemT(V)(N), *(P); (O); (O) = 0)                       \
-			for (UmVBucketT(V) * (B) = (void *)UmVBucket(V); (B);  \
-			     (B) = (B)->next)                                  \
-				for ((C) = 0, (N) = (B)->data[C],              \
-				    (P) = (B)->data + (C);                     \
-				     (C) < (B)->end; (C)++, (I)++,             \
-				    (N) = (B)->data[C], (P) = (B)->data + (C))
+	for (int(O) = 1, (C) = 0, (I) = 0; (O); (O) = 0)                           \
+		for (UmVItemT(V)(N), *(P); (O); (O) = 0)                               \
+			for (UmVBucketT(V) * (B) = (void *)UmVBucket(V); (B);              \
+				 (B) = (B)->next)                                              \
+				for ((C) = 0, (N) = (B)->data[C], (P) = (B)->data + (C);       \
+					 (C) < (B)->end;                                           \
+					 (C)++, (I)++, (N) = (B)->data[C], (P) = (B)->data + (C))
 
 // V self
 // N name
@@ -127,17 +126,14 @@ static_assert(sizeof(_umv_b) == sizeof(_umv_bucket(char)), "bucket");
 // E  end index name
 // EI end index value
 #define UmVLoopImp(V, N, B, O, I, C, F, S, SI, E, EI)                          \
-	for (int(O) = 1, (F), (C), (I) = (SI), (S) = (SI), (E) = (EI); O;      \
-	     (O) = 0)                                                          \
-		for (UmVItemT(V)(N); (O); (O) = 0)                             \
-			for (UmVBucketT(V) * (B) =                             \
-				 (void *)_umv_rewind(UmVGHead(V), &(S), &(E)); \
-			     (O) && (B); (B) = (B)->next)                      \
-				for ((C) = (S), (S) = 0, (N) = (B)->data[C],   \
-				    (F) = (E) <= (B)->end ? ((O) = 0, (E))     \
-							  : (B)->end;          \
-				     (C) < (F);                                \
-				     (C)++, (I)++, (N) = (B)->data[C])
+	for (int(O) = 1, (F), (C), (I) = (SI), (S) = (SI), (E) = (EI); O; (O) = 0) \
+		for (UmVItemT(V)(N); (O); (O) = 0)                                     \
+			for (UmVBucketT(V) * (B) =                                         \
+					 (void *)_umv_rewind(UmVGHead(V), &(S), &(E));             \
+				 (O) && (B); (B) = (B)->next)                                  \
+				for ((C) = (S), (S) = 0, (N) = (B)->data[C],                   \
+					(F) = (E) <= (B)->end ? ((O) = 0, (E)) : (B)->end;         \
+					 (C) < (F); (C)++, (I)++, (N) = (B)->data[C])
 
 #define UmVLastBucket(B, N, CAP, ONE)                                          \
 	(__typeof__(B))_umv_last_bucket((_umv_b *)B, N, CAP, ONE)
@@ -164,7 +160,7 @@ static inline _umv_b *_umv_alloc_bucket(size_t cap, size_t one)
 }
 
 static inline _umv_b *_umv_last_bucket(_umv_b *b, size_t n, size_t cap,
-				       size_t one)
+									   size_t one)
 {
 	assert(n <= cap);
 
@@ -220,7 +216,7 @@ static inline void *_umv_at(_umv_h *h, size_t one, size_t index)
 // TODO optimize memcpy in blocks
 // TODO hugely inefficient with push at every iteration
 static inline _umv_h *_umv_slice(_umv_h *out, _umv_h *h, size_t one,
-				 size_t start, size_t end)
+								 size_t start, size_t end)
 {
 	assert(end >= start);
 
