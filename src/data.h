@@ -54,6 +54,7 @@ typedef struct ir {
 		struct {
 			size_t index; // of def
 			char *name;
+			size_t dst;
 		} ref;
 
 		struct {
@@ -245,12 +246,13 @@ typedef struct ir_function {
 #define def(NAME, INDEX, INIT)                                                 \
 	((define){.name = NAME, .index = (INDEX), .init = (INIT)})
 
-#define iset(I) ((ir){.tag = I_SET, .set = {.index = I}})
-#define iref(N, I) ((ir){.tag = I_REF, .ref = {.index = I, .name = N}})
+#define iref(N, I)                                                             \
+	((ir){.tag = I_REF, .ref = {.index = I, .name = N, .dst = 9999}})
 #define idef(N, I) ((ir){.tag = I_DEF, .def = {.index = I, .name = N}})
 #define ioper(I, N) ((ir){.tag = I_OPER, .oper = {.index = I, .count = N}})
 #define iskip(N) ((ir){.tag = I_SKIP, .skip = {.count = N}})
-#define ilint(I, V) ((ir){.tag = I_LINT, .lint = {.index = I, .value = V}})
+#define ilint(I, V)                                                            \
+	((ir){.tag = I_LINT, .lint = {.index = I, .value = V, .dst = 9999}})
 
 #define adiamond(N) ((ast){.tag = A_DIAMOND, .diamond = {.name = (N)}})
 

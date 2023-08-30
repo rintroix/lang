@@ -16,8 +16,6 @@
 // decls
 static int is(ast a, ast *pat);
 static ir parse(typetable *table, vec(ir) body, ast a);
-// static ast parse(context *ctx, typetable *table, ast a);
-// static void compile(context *ctx, typetable *table, callreq req);
 static callreq *get_callreqp(typetable *table, size_t index);
 static char *compile_type(type t);
 
@@ -126,17 +124,20 @@ static char *_show(typetable *t, ir e)
 			 e.def.name ? e.def.name : ".");
 	} break;
 	case I_REF: {
-		asprintf(&out, "      REF   %2zu %s", e.ref.index, e.ref.name);
+		char *r = e.ref.dst == 0 ? "000 =" : "     ";
+		asprintf(&out, "%s REF   %2zu %s", r, e.ref.index, e.ref.name);
 	} break;
 	case I_CALL: {
-		asprintf(&out, "%03zu = CALL  %2zu %s", e.call.dst, e.call.count,
+		asprintf(&out, "%03zu = CALL  %2zu %s", e.call.dst,
+			 e.call.count,
 			 t ? get_callreqp(t, e.call.index)->name : "");
 	} break;
 	case I_OPER: {
 		todo;
 	} break;
 	case I_LINT: {
-		asprintf(&out, "      LINT  %2zu %d", e.lint.index.value, e.lint.value);
+		asprintf(&out, "      LINT  %2zu %d", e.lint.index.value,
+			 e.lint.value);
 	} break;
 	case I_LSTR: {
 		todo;
@@ -151,19 +152,14 @@ static char *_show(typetable *t, ir e)
 	return out;
 }
 
-static char *show(ir e) {
-	return _show(NULL, e);
-}
+static char *show(ir e) { return _show(NULL, e); }
 
 static void dump_full(typetable *table, vec(ir) items)
 {
 	veach(items, item, i) { log("\t%03d %s", i, _show(table, item)); }
 }
 
-static void dump(vec(ir) items)
-{
-	dump_full(NULL, items);
-}
+static void dump(vec(ir) items) { dump_full(NULL, items); }
 
 static type make_simple_type(char *name)
 {
@@ -344,7 +340,8 @@ static void change_type(typetable *table, size_t index, type t)
 
 static typeindex add_unknown(typetable *table)
 {
-	type t = (type){.tag = T_UNKNOWN, .unknown = {.index = vlen(table->types)}};
+	type t =
+	    (type){.tag = T_UNKNOWN, .unknown = {.index = vlen(table->types)}};
 	return add_type(table, t);
 }
 
@@ -398,6 +395,11 @@ static type get_type(typetable *table, typeindex index)
 	return vget(table->types, index.value);
 }
 
+static type *get_typep(typetable *table, typeindex index)
+{
+	return vat(table->types, index.value);
+}
+
 static typetable new_table(size_t arity)
 {
 	return (typetable){
@@ -448,17 +450,22 @@ static type *tlift(type t)
 	return ptr;
 }
 
+static void embed_ref(typetable *table, vec(ir) body, char *name, size_t index)
+{
+	if (name) {
+		add_use(table, vlen(body));
+	} else {
+		ir *defp = vat(body, index);
+		bug_if_not(defp->tag == I_DEF);
+		defp->def.count++;
+	}
+}
+
 static void embed(typetable *table, vec(ir) body, ir e)
 {
 	switch (e.tag) {
 	case I_REF: {
-		if (e.ref.name) {
-			add_use(table, vlen(body));
-		} else {
-			ir *defp = vat(body, e.ref.index);
-			bug_if_not(defp->tag == I_DEF);
-			defp->def.count++;
-		}
+		embed_ref(table, body, e.ref.name, e.ref.index);
 		push(body, e);
 	} break;
 	case I_LINT: {
@@ -581,7 +588,7 @@ static size_t count_operands(opreq r)
 }
 
 static opreq parse_operator(typetable *table, vec(ir) body, vec(ir) post,
-			       vec(ast) items, size_t start);
+			    vec(ast) items, size_t start);
 
 static ir parse_list(typetable *table, vec(ir) body, vec(ast) items)
 {
@@ -630,7 +637,7 @@ static ir parse_list(typetable *table, vec(ir) body, vec(ast) items)
 }
 
 static ir parse_many(typetable *table, vec(ir) body, vec(ast) items,
-			size_t start, size_t end)
+		     size_t start, size_t end)
 {
 	bug_if(end == start);
 
@@ -641,7 +648,7 @@ static ir parse_many(typetable *table, vec(ir) body, vec(ast) items,
 }
 
 static opreq parse_operator(typetable *table, vec(ir) body, vec(ir) post,
-			       vec(ast) items, size_t start)
+			    vec(ast) items, size_t start)
 {
 	// TODO opreq, same as callreq
 	// TODO better find
@@ -773,17 +780,67 @@ static void ir_funargs(typetable *table, vec(ir) body, vec(ast) args)
 	}
 }
 
+static void return_that(typetable *table, vec(ir) body, ir e)
+{
+	switch (e.tag) {
+	case I_DEF: {
+		todo;
+	} break;
+	case I_REF: {
+		// TODO types
+		e.ref.dst = 0;
+		embed_ref(table, body, e.ref.name, e.ref.index);
+		push(body, e);
+		ir *d = vat(body, e.ref.index);
+		bug_if_not(d->tag == I_DEF);
+		type *t = get_typep(table, d->def.index);
+		type *r = get_typep(table, (typeindex){0});
+		if (!same_type(*r, *t)) {
+			type *x = unify_types(r, t);
+			if (x == r) {
+				// TODO back propagate
+			} else {
+				// TODO ret propagate
+			}
+		}
+	} break;
+	case I_CALL: {
+		todo;
+	} break;
+	case I_OPER: {
+		todo;
+	} break;
+	case I_LINT: {
+		// TODO types
+		e.lint.dst = 0;
+		push(body, e);
+	} break;
+	case I_LSTR: {
+		todo;
+	} break;
+	case I_LFLT: {
+		todo;
+	} break;
+	case I_SKIP: {
+		todo;
+	} break;
+	}
+}
+
 static ir_function make_function(char *name, type *fret, vec(ast) args,
-				    vec(ast) rest)
+				 vec(ast) rest)
 {
 	typetable table = new_table(vlen(args));
-	typeindex retindex = fret ? add_type(&table, *fret) : add_unknown(&table);
 	vec(ir) body = avec(ir); // TODO array to be able to jump
-	push(body, iskip(vlen(args)));
+	if (fret)
+		add_def(&table, body, "-ret-", *fret);
+	else
+		add_def_unknown(&table, body, "-ret-");
 
 	ir_funargs(&table, body, args);
 	ir e = parse_block(&table, body, rest);
-	// TODO return 
+	return_that(&table, body, e);
+	// TODO return
 	// TODO back propagate
 
 	// type iret = get_type(&table, init.index);
@@ -801,9 +858,8 @@ static ir_function make_function(char *name, type *fret, vec(ast) args,
 static ir_function make_extern(char *name, type ret, vec(ast) args)
 {
 	typetable table = new_table(vlen(args));
-	typeindex retindex = add_type(&table, ret);
 	vec(ir) body = avec(ir); // TODO array to be able to jump
-	push(body, iskip(vlen(args)));
+	add_def(&table, body, "-ret-", ret);
 
 	ir_funargs(&table, body, args);
 	ir_function f =
@@ -1024,9 +1080,9 @@ static int oreg(output *o, function *fp, typetable table)
 	return 1;
 }
 
-static void compile(output *o, typetable *table, vec(ir) body, int indent)
+static void compile(output *o, typetable *table, vec(ir) body, int skip,
+		    int indent)
 {
-	int skip = 0;
 	int sub = 0;
 	uint arg = 0;
 	veach(body, e, i)
@@ -1044,6 +1100,8 @@ static void compile(output *o, typetable *table, vec(ir) body, int indent)
 		default:
 			break;
 		}
+
+		// log("NOW %s", show(e));
 
 		if (!(sub || arg))
 			odef(o, "%*s", indent, "");
@@ -1065,7 +1123,13 @@ static void compile(output *o, typetable *table, vec(ir) body, int indent)
 			}
 		} break;
 		case I_REF: {
-			bug_if_not(sub || arg);
+			if (e.ref.dst == 0) {
+				bug_if(sub || arg);
+				odef(o, "return ");
+				sub = 1;
+			} else {
+				bug_if_not(sub || arg);
+			}
 			odef(o, "REF/%zu/%s", e.ref.index, e.ref.name);
 		} break;
 		case I_CALL: {
@@ -1080,7 +1144,13 @@ static void compile(output *o, typetable *table, vec(ir) body, int indent)
 			todo;
 		} break;
 		case I_LINT: {
-			bug_if_not(sub || arg);
+			if (e.lint.dst == 0) {
+				bug_if(sub || arg);
+				odef(o, "return ");
+				sub = 1;
+			} else {
+				bug_if_not(sub || arg);
+			}
 			odef(o, "%d", e.lint.value);
 		} break;
 		case I_LFLT: {
@@ -1091,11 +1161,12 @@ static void compile(output *o, typetable *table, vec(ir) body, int indent)
 		} break;
 		}
 
-		switch(arg) {
+		switch (arg) {
 		case 1:
 			arg--;
 			odef(o, ")");
 		case 0:
+			bug_if(sub > 1);
 			if (sub == 1) {
 				sub = 0;
 				odef(o, ";\n");
@@ -1136,7 +1207,7 @@ static void compile_fn(output *o, ir_function f)
 	if (!isextern) {
 		odef(o, ")\n{\n");
 		dump_full(&f.table, f.body);
-		compile(o, &f.table, f.body, 2);
+		compile(o, &f.table, f.body, 1 + f.table.arity, 2);
 		odef(o, "}\n");
 	}
 }
@@ -1229,10 +1300,7 @@ int main(int argc, char **argv)
 
 	context topctx = parse_top(tops);
 
-	veach(topctx.irfns, f)
-	{
-		compile_fn(&out, f);
-	}
+	veach(topctx.irfns, f) { compile_fn(&out, f); }
 
 	printf("%s", umd_to_cstr(out.declarations));
 	printf("%s", umd_to_cstr(out.definitions));

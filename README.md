@@ -1,0 +1,3 @@
+```
+./rebuild c build run
+```

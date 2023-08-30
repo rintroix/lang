@@ -62,6 +62,6 @@ build() {
 
 	LD app build/parser.o build/main.o 
 
-	external/sparse/sparse $CFLAGS src/main.c
+	# external/sparse/sparse $CFLAGS $LDFLAGS src/main.c
 }
 
